@@ -4,9 +4,9 @@ import * as THREE from 'three';
 import { useAstronautMotion } from '../../hooks/useAstronautMotion';
 
 // ==============================================================
-// TINY SCI-FI JETPACK EXHAUST PARTICLES
+// JETPACK EXHAUST PARTICLES (ACTIVE DURING UPWARD THRUST)
 // ==============================================================
-function JetpackExhaustParticles({ count = 16, flameIntensityRef }) {
+function JetpackExhaustParticles({ count = 20, flameIntensityRef }) {
   const pointsRef = useRef();
 
   const [positions, scales, speeds] = useMemo(() => {
@@ -15,11 +15,11 @@ function JetpackExhaustParticles({ count = 16, flameIntensityRef }) {
     const sp = new Float32Array(count);
 
     for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 0.08;
-      pos[i * 3 + 1] = -Math.random() * 0.25;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 0.08;
-      sc[i] = Math.random() * 0.03 + 0.015;
-      sp[i] = Math.random() * 0.8 + 0.5;
+      pos[i * 3] = (Math.random() - 0.5) * 0.12;
+      pos[i * 3 + 1] = -Math.random() * 0.35;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 0.12;
+      sc[i] = Math.random() * 0.04 + 0.02;
+      sp[i] = Math.random() * 1.2 + 0.8;
     }
     return [pos, sc, sp];
   }, [count]);
@@ -28,7 +28,7 @@ function JetpackExhaustParticles({ count = 16, flameIntensityRef }) {
     if (!pointsRef.current) return;
     const intensity = flameIntensityRef.current;
 
-    if (intensity < 0.05) {
+    if (intensity < 0.04) {
       pointsRef.current.visible = false;
       return;
     }
@@ -37,30 +37,28 @@ function JetpackExhaustParticles({ count = 16, flameIntensityRef }) {
     const array = pointsRef.current.geometry.attributes.position.array;
 
     for (let i = 0; i < count; i++) {
-      // Stream particles downward
-      array[i * 3 + 1] -= delta * speeds[i] * 1.5;
+      array[i * 3 + 1] -= delta * speeds[i] * 1.8;
 
-      // Reset when faded out
-      if (array[i * 3 + 1] < -0.35) {
-        array[i * 3] = (Math.random() - 0.5) * 0.08;
+      if (array[i * 3 + 1] < -0.45) {
+        array[i * 3] = (Math.random() - 0.5) * 0.12;
         array[i * 3 + 1] = -0.05;
-        array[i * 3 + 2] = (Math.random() - 0.5) * 0.08;
+        array[i * 3 + 2] = (Math.random() - 0.5) * 0.12;
       }
     }
     pointsRef.current.geometry.attributes.position.needsUpdate = true;
-    pointsRef.current.material.opacity = intensity * 0.65;
+    pointsRef.current.material.opacity = intensity * 0.75;
   });
 
   return (
-    <points ref={pointsRef} position={[0, -0.16, -0.16]}>
+    <points ref={pointsRef} position={[0, -0.22, -0.16]}>
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" count={count} array={positions} itemSize={3} />
       </bufferGeometry>
       <pointsMaterial
-        size={0.035}
+        size={0.045}
         color="#00FFA3"
         transparent
-        opacity={0.65}
+        opacity={0.7}
         blending={THREE.AdditiveBlending}
         depthWrite={false}
       />
@@ -72,9 +70,10 @@ function JetpackExhaustParticles({ count = 16, flameIntensityRef }) {
 // MASTER COMPONENT: PORTAL ASTRONAUT
 // ==============================================================
 export default function PortalAstronaut({
-  basePosition = [2.45, 0.75, 0.35],
+  basePosition = [-2.15, 0.75, 0.65],
   reducedMotion = false,
   isMobile = false,
+  scrollProgress = 0,
 }) {
   const rootRef = useRef();
   const leftFlameRef = useRef();
@@ -87,11 +86,13 @@ export default function PortalAstronaut({
   const rightLegRef = useRef();
   const leftArmRef = useRef();
   const rightArmRef = useRef();
+  const haloRingRef = useRef();
 
   const { motionRef, update } = useAstronautMotion({
     basePosition,
     reducedMotion,
     isMobile,
+    scrollProgress,
   });
 
   useFrame((state, delta) => {
@@ -101,15 +102,15 @@ export default function PortalAstronaut({
 
     if (!rootRef.current) return;
 
-    // Apply smooth positions & rotations to root character group
+    // Apply smooth positions & rotations
     rootRef.current.position.set(m.x, m.y, m.z);
     rootRef.current.rotation.set(m.rotX, m.rotY, m.rotZ);
 
-    // Jetpack Flame dynamics (only active when scrolling up / rising)
+    // Jetpack Flame dynamics (active when scrolling up)
     const flameActive = m.flameIntensity > 0.03;
-    const flicker = 1.0 + Math.sin(time * 36) * 0.18;
+    const flicker = 1.0 + Math.sin(time * 38) * 0.22;
     const flameScaleY = m.flameIntensity * flicker;
-    const flameScaleXZ = m.flameIntensity * (0.8 + Math.cos(time * 28) * 0.12);
+    const flameScaleXZ = m.flameIntensity * (0.85 + Math.cos(time * 30) * 0.15);
 
     if (leftFlameRef.current && rightFlameRef.current) {
       leftFlameRef.current.visible = flameActive;
@@ -121,27 +122,24 @@ export default function PortalAstronaut({
     if (leftOuterFlameRef.current && rightOuterFlameRef.current) {
       leftOuterFlameRef.current.visible = flameActive;
       rightOuterFlameRef.current.visible = flameActive;
-      leftOuterFlameRef.current.scale.set(flameScaleXZ * 1.3, flameScaleY * 1.25, flameScaleXZ * 1.3);
-      rightOuterFlameRef.current.scale.set(flameScaleXZ * 1.3, flameScaleY * 1.25, flameScaleXZ * 1.3);
+      leftOuterFlameRef.current.scale.set(flameScaleXZ * 1.35, flameScaleY * 1.3, flameScaleXZ * 1.35);
+      rightOuterFlameRef.current.scale.set(flameScaleXZ * 1.35, flameScaleY * 1.3, flameScaleXZ * 1.35);
     }
 
-    // Limb micro-motion
-    if (leftLegRef.current) {
-      leftLegRef.current.rotation.x = m.legSwing;
-    }
-    if (rightLegRef.current) {
-      rightLegRef.current.rotation.x = -m.legSwing * 0.8;
-    }
-    if (leftArmRef.current) {
-      leftArmRef.current.rotation.x = m.armSwing;
-    }
-    if (rightArmRef.current) {
-      rightArmRef.current.rotation.x = -m.armSwing * 0.85;
+    // Limb zero-gravity animation
+    if (leftLegRef.current) leftLegRef.current.rotation.x = m.legSwing;
+    if (rightLegRef.current) rightLegRef.current.rotation.x = -m.legSwing * 0.85;
+    if (leftArmRef.current) leftArmRef.current.rotation.x = m.armSwing;
+    if (rightArmRef.current) rightArmRef.current.rotation.x = -m.armSwing * 0.9;
+
+    // Halo micro-rotation
+    if (haloRingRef.current) {
+      haloRingRef.current.rotation.z += delta * 0.6;
     }
   });
 
-  // Scale: Micro-character proportions (total height ~0.65)
-  const charScale = isMobile ? 0.34 : 0.42;
+  // Noticeable micro-character scale (clearly visible without dominating)
+  const charScale = isMobile ? 0.62 : 0.82;
 
   return (
     <group
@@ -150,44 +148,58 @@ export default function PortalAstronaut({
       // Disables pointer raycasting so astronaut never steals clicks or divider drags
       raycast={() => null}
     >
+      {/* Dedicated Local Point Light to Guarantee High Visibility */}
+      <pointLight position={[0, 0.4, 0.6]} intensity={2.4} color="#00E5FF" distance={4.0} />
+
+      {/* Floating Holographic Cyber Halo above Helmet */}
+      <group position={[0, 0.64, 0]} rotation={[Math.PI / 2.5, 0, 0]}>
+        <mesh ref={haloRingRef}>
+          <ringGeometry args={[0.16, 0.175, 24]} />
+          <meshBasicMaterial color="#00E5FF" transparent opacity={0.65} blending={THREE.AdditiveBlending} />
+        </mesh>
+      </group>
+
       {/* ============================================================== */}
       {/* 1. HELMET & VISOR                                              */}
       {/* ============================================================== */}
       <group position={[0, 0.38, 0]}>
         {/* Platinum White Helmet Shell */}
-        <mesh>
-          <sphereGeometry args={[0.22, 24, 24]} />
+        <mesh castShadow>
+          <sphereGeometry args={[0.22, 28, 28]} />
           <meshStandardMaterial
-            color="#DCE7EC"
-            roughness={0.32}
-            metalness={0.4}
+            color="#F1F5F9"
+            roughness={0.2}
+            metalness={0.6}
+            envMapIntensity={1.5}
           />
         </mesh>
 
-        {/* High-Gloss Obsidian Visor with Subtle Cyan Glow */}
+        {/* Glossy Obsidian Visor with Vibrant Electric Cyan Glow */}
         <mesh position={[0, 0.01, 0.08]} rotation={[-0.1, 0, 0]}>
-          <sphereGeometry args={[0.18, 24, 16, 0, Math.PI, 0, Math.PI * 0.65]} />
+          <sphereGeometry args={[0.185, 24, 16, 0, Math.PI, 0, Math.PI * 0.68]} />
           <meshStandardMaterial
             color="#050709"
-            roughness={0.06}
-            metalness={0.96}
+            roughness={0.05}
+            metalness={0.98}
+            emissive="#00E5FF"
+            emissiveIntensity={0.6}
           />
         </mesh>
 
         {/* Visor Cyan Neon Rim */}
-        <mesh position={[0, 0.02, 0.17]} rotation={[0.4, 0, 0]}>
-          <torusGeometry args={[0.12, 0.006, 12, 32, Math.PI]} />
-          <meshBasicMaterial color="#00E5FF" transparent opacity={0.8} />
+        <mesh position={[0, 0.02, 0.175]} rotation={[0.4, 0, 0]}>
+          <torusGeometry args={[0.125, 0.008, 12, 32, Math.PI]} />
+          <meshBasicMaterial color="#00E5FF" transparent opacity={0.95} blending={THREE.AdditiveBlending} />
         </mesh>
 
         {/* Side Comms / Audio Ear Pods */}
         <mesh position={[-0.21, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.035, 0.035, 0.04, 12]} />
-          <meshStandardMaterial color="#101820" roughness={0.3} metalness={0.8} />
+          <cylinderGeometry args={[0.038, 0.038, 0.045, 16]} />
+          <meshStandardMaterial color="#101820" roughness={0.3} metalness={0.85} />
         </mesh>
         <mesh position={[0.21, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.035, 0.035, 0.04, 12]} />
-          <meshStandardMaterial color="#101820" roughness={0.3} metalness={0.8} />
+          <cylinderGeometry args={[0.038, 0.038, 0.045, 16]} />
+          <meshStandardMaterial color="#101820" roughness={0.3} metalness={0.85} />
         </mesh>
       </group>
 
@@ -196,111 +208,122 @@ export default function PortalAstronaut({
       {/* ============================================================== */}
       <group position={[0, 0.06, 0]}>
         {/* Main Suit Torso Pod */}
-        <mesh>
-          <capsuleGeometry args={[0.16, 0.22, 16, 16]} />
+        <mesh castShadow>
+          <capsuleGeometry args={[0.165, 0.22, 16, 16]} />
           <meshStandardMaterial
-            color="#DCE7EC"
-            roughness={0.35}
-            metalness={0.3}
+            color="#E2E8F0"
+            roughness={0.28}
+            metalness={0.4}
           />
         </mesh>
 
         {/* Chest Cyber-Badge / Life Support Display */}
-        <mesh position={[0, 0.06, 0.165]}>
-          <boxGeometry args={[0.09, 0.06, 0.01]} />
+        <mesh position={[0, 0.06, 0.17]}>
+          <boxGeometry args={[0.095, 0.065, 0.015]} />
           <meshStandardMaterial
             color="#00FFA3"
             emissive="#00FFA3"
-            emissiveIntensity={1.8}
+            emissiveIntensity={2.5}
             roughness={0.2}
           />
         </mesh>
 
         {/* Graphite Utility Belt */}
         <mesh position={[0, -0.1, 0]}>
-          <cylinderGeometry args={[0.165, 0.165, 0.04, 20]} />
-          <meshStandardMaterial color="#101820" roughness={0.4} metalness={0.8} />
+          <cylinderGeometry args={[0.17, 0.17, 0.045, 20]} />
+          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.85} />
         </mesh>
       </group>
 
       {/* ============================================================== */}
       {/* 3. SCI-FI DUAL THRUSTER JETPACK & JETS                         */}
       {/* ============================================================== */}
-      <group position={[0, 0.1, -0.15]}>
+      <group position={[0, 0.1, -0.16]}>
         {/* Jetpack Main Pack Body */}
         <mesh position={[0, 0, 0]}>
-          <boxGeometry args={[0.22, 0.24, 0.08]} />
-          <meshStandardMaterial color="#101820" roughness={0.25} metalness={0.85} />
+          <boxGeometry args={[0.23, 0.25, 0.085]} />
+          <meshStandardMaterial color="#101820" roughness={0.25} metalness={0.88} />
         </mesh>
 
         {/* Twin Fuel Cannisters */}
-        <mesh position={[-0.08, 0, 0.01]}>
-          <cylinderGeometry args={[0.042, 0.042, 0.26, 16]} />
-          <meshStandardMaterial color="#17232C" roughness={0.3} metalness={0.8} />
+        <mesh position={[-0.085, 0, 0.01]}>
+          <cylinderGeometry args={[0.044, 0.044, 0.27, 16]} />
+          <meshStandardMaterial color="#17232C" roughness={0.3} metalness={0.85} />
         </mesh>
-        <mesh position={[0.08, 0, 0.01]}>
-          <cylinderGeometry args={[0.042, 0.042, 0.26, 16]} />
-          <meshStandardMaterial color="#17232C" roughness={0.3} metalness={0.8} />
+        <mesh position={[0.085, 0, 0.01]}>
+          <cylinderGeometry args={[0.044, 0.044, 0.27, 16]} />
+          <meshStandardMaterial color="#17232C" roughness={0.3} metalness={0.85} />
         </mesh>
 
         {/* Thruster Nozzle Left */}
-        <mesh position={[-0.08, -0.15, 0.01]} rotation={[Math.PI, 0, 0]}>
-          <coneGeometry args={[0.042, 0.06, 16]} />
-          <meshStandardMaterial color="#0B1117" roughness={0.2} metalness={0.9} />
+        <mesh position={[-0.085, -0.155, 0.01]} rotation={[Math.PI, 0, 0]}>
+          <coneGeometry args={[0.044, 0.065, 16]} />
+          <meshStandardMaterial color="#0B1117" roughness={0.2} metalness={0.92} />
         </mesh>
+        {/* Thruster Pilot Ring Left (Idle Glow) */}
+        <mesh position={[-0.085, -0.185, 0.01]} rotation={[Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.02, 0.038, 16]} />
+          <meshBasicMaterial color="#00E5FF" transparent opacity={0.65} />
+        </mesh>
+
         {/* Thruster Nozzle Right */}
-        <mesh position={[0.08, -0.15, 0.01]} rotation={[Math.PI, 0, 0]}>
-          <coneGeometry args={[0.042, 0.06, 16]} />
-          <meshStandardMaterial color="#0B1117" roughness={0.2} metalness={0.9} />
+        <mesh position={[0.085, -0.155, 0.01]} rotation={[Math.PI, 0, 0]}>
+          <coneGeometry args={[0.044, 0.065, 16]} />
+          <meshStandardMaterial color="#0B1117" roughness={0.2} metalness={0.92} />
+        </mesh>
+        {/* Thruster Pilot Ring Right (Idle Glow) */}
+        <mesh position={[0.085, -0.185, 0.01]} rotation={[Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.02, 0.038, 16]} />
+          <meshBasicMaterial color="#00E5FF" transparent opacity={0.65} />
         </mesh>
 
         {/* LEFT JETPACK FLAME (Electric Cyan Core) */}
-        <mesh ref={leftFlameRef} visible={false} position={[-0.08, -0.27, 0.01]} rotation={[Math.PI, 0, 0]}>
-          <coneGeometry args={[0.038, 0.22, 12]} />
+        <mesh ref={leftFlameRef} visible={false} position={[-0.085, -0.3, 0.01]} rotation={[Math.PI, 0, 0]}>
+          <coneGeometry args={[0.042, 0.26, 16]} />
           <meshStandardMaterial
             color="#00E5FF"
             emissive="#00E5FF"
-            emissiveIntensity={3.2}
+            emissiveIntensity={3.8}
             roughness={0.1}
           />
         </mesh>
 
         {/* LEFT OUTER GLOW (Laser Mint Halo) */}
-        <mesh ref={leftOuterFlameRef} visible={false} position={[-0.08, -0.29, 0.01]} rotation={[Math.PI, 0, 0]}>
-          <coneGeometry args={[0.065, 0.28, 12]} />
+        <mesh ref={leftOuterFlameRef} visible={false} position={[-0.085, -0.32, 0.01]} rotation={[Math.PI, 0, 0]}>
+          <coneGeometry args={[0.075, 0.32, 16]} />
           <meshBasicMaterial
             color="#00FFA3"
             transparent
-            opacity={0.45}
+            opacity={0.5}
             blending={THREE.AdditiveBlending}
           />
         </mesh>
 
         {/* RIGHT JETPACK FLAME (Electric Cyan Core) */}
-        <mesh ref={rightFlameRef} visible={false} position={[0.08, -0.27, 0.01]} rotation={[Math.PI, 0, 0]}>
-          <coneGeometry args={[0.038, 0.22, 12]} />
+        <mesh ref={rightFlameRef} visible={false} position={[0.085, -0.3, 0.01]} rotation={[Math.PI, 0, 0]}>
+          <coneGeometry args={[0.042, 0.26, 16]} />
           <meshStandardMaterial
             color="#00E5FF"
             emissive="#00E5FF"
-            emissiveIntensity={3.2}
+            emissiveIntensity={3.8}
             roughness={0.1}
           />
         </mesh>
 
         {/* RIGHT OUTER GLOW (Laser Mint Halo) */}
-        <mesh ref={rightOuterFlameRef} visible={false} position={[0.08, -0.29, 0.01]} rotation={[Math.PI, 0, 0]}>
-          <coneGeometry args={[0.065, 0.28, 12]} />
+        <mesh ref={rightOuterFlameRef} visible={false} position={[0.085, -0.32, 0.01]} rotation={[Math.PI, 0, 0]}>
+          <coneGeometry args={[0.075, 0.32, 16]} />
           <meshBasicMaterial
             color="#00FFA3"
             transparent
-            opacity={0.45}
+            opacity={0.5}
             blending={THREE.AdditiveBlending}
           />
         </mesh>
       </group>
 
-      {/* Tiny Particle Exhaust Stream */}
-      <JetpackExhaustParticles count={14} flameIntensityRef={flameIntensityRef} />
+      {/* Particle Exhaust Stream */}
+      <JetpackExhaustParticles count={20} flameIntensityRef={flameIntensityRef} />
 
       {/* ============================================================== */}
       {/* 4. ARMS & MITTEN GLOVES                                         */}
@@ -308,26 +331,26 @@ export default function PortalAstronaut({
       {/* Left Arm */}
       <group ref={leftArmRef} position={[-0.2, 0.12, 0]}>
         <mesh position={[-0.04, -0.1, 0.02]} rotation={[0.2, 0, 0.3]}>
-          <capsuleGeometry args={[0.038, 0.14, 10, 10]} />
-          <meshStandardMaterial color="#DCE7EC" roughness={0.35} metalness={0.3} />
+          <capsuleGeometry args={[0.04, 0.15, 10, 10]} />
+          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} />
         </mesh>
         {/* Glove */}
-        <mesh position={[-0.08, -0.2, 0.04]}>
-          <sphereGeometry args={[0.046, 12, 12]} />
-          <meshStandardMaterial color="#101820" roughness={0.4} metalness={0.7} />
+        <mesh position={[-0.08, -0.21, 0.04]}>
+          <sphereGeometry args={[0.048, 12, 12]} />
+          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.75} />
         </mesh>
       </group>
 
       {/* Right Arm */}
       <group ref={rightArmRef} position={[0.2, 0.12, 0]}>
         <mesh position={[0.04, -0.1, 0.02]} rotation={[0.2, 0, -0.3]}>
-          <capsuleGeometry args={[0.038, 0.14, 10, 10]} />
-          <meshStandardMaterial color="#DCE7EC" roughness={0.35} metalness={0.3} />
+          <capsuleGeometry args={[0.04, 0.15, 10, 10]} />
+          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} />
         </mesh>
         {/* Glove */}
-        <mesh position={[0.08, -0.2, 0.04]}>
-          <sphereGeometry args={[0.046, 12, 12]} />
-          <meshStandardMaterial color="#101820" roughness={0.4} metalness={0.7} />
+        <mesh position={[0.08, -0.21, 0.04]}>
+          <sphereGeometry args={[0.048, 12, 12]} />
+          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.75} />
         </mesh>
       </group>
 
@@ -336,27 +359,27 @@ export default function PortalAstronaut({
       {/* ============================================================== */}
       {/* Left Leg */}
       <group ref={leftLegRef} position={[-0.09, -0.16, 0]}>
-        <mesh position={[0, -0.1, 0.02]}>
-          <capsuleGeometry args={[0.045, 0.14, 10, 10]} />
-          <meshStandardMaterial color="#DCE7EC" roughness={0.35} metalness={0.3} />
+        <mesh position={[0, -0.11, 0.02]}>
+          <capsuleGeometry args={[0.048, 0.15, 10, 10]} />
+          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} />
         </mesh>
         {/* Boot */}
-        <mesh position={[0, -0.2, 0.04]}>
-          <boxGeometry args={[0.065, 0.05, 0.1]} />
-          <meshStandardMaterial color="#101820" roughness={0.4} metalness={0.8} />
+        <mesh position={[0, -0.21, 0.04]}>
+          <boxGeometry args={[0.07, 0.055, 0.11]} />
+          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.85} />
         </mesh>
       </group>
 
       {/* Right Leg */}
       <group ref={rightLegRef} position={[0.09, -0.16, 0]}>
-        <mesh position={[0, -0.1, 0.02]}>
-          <capsuleGeometry args={[0.045, 0.14, 10, 10]} />
-          <meshStandardMaterial color="#DCE7EC" roughness={0.35} metalness={0.3} />
+        <mesh position={[0, -0.11, 0.02]}>
+          <capsuleGeometry args={[0.048, 0.15, 10, 10]} />
+          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} />
         </mesh>
         {/* Boot */}
-        <mesh position={[0, -0.2, 0.04]}>
-          <boxGeometry args={[0.065, 0.05, 0.1]} />
-          <meshStandardMaterial color="#101820" roughness={0.4} metalness={0.8} />
+        <mesh position={[0, -0.21, 0.04]}>
+          <boxGeometry args={[0.07, 0.055, 0.11]} />
+          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.85} />
         </mesh>
       </group>
     </group>

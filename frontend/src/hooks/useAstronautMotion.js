@@ -3,55 +3,50 @@ import * as THREE from 'three';
 
 /**
  * useAstronautMotion
- * Tracks window scroll velocity, scroll direction, and zero-gravity drift.
- * All math runs inside useFrame with zero React component re-renders.
+ * High-sensitivity scroll velocity and zero-gravity drift physics for the Portal Astronaut.
+ * Detects both window scroll events and section scrollProgress changes.
  */
 export function useAstronautMotion({
-  basePosition = [2.4, 0.8, 0.4],
+  basePosition = [-2.15, 0.75, 0.65],
   reducedMotion = false,
   isMobile = false,
+  scrollProgress = 0,
 }) {
   const scrollYRef = useRef(typeof window !== 'undefined' ? window.scrollY : 0);
   const scrollDeltaRef = useRef(0);
   const lastScrollTimeRef = useRef(Date.now());
+  const prevProgressRef = useRef(scrollProgress);
 
-  // Frame-by-frame animated state
+  // Mutable animation state (Zero React re-renders)
   const motionRef = useRef({
-    // Positions
+    // World transforms
     x: basePosition[0],
     y: basePosition[1],
     z: basePosition[2],
-    // Rotations (Euler angles)
     rotX: 0,
-    rotY: 0,
+    rotY: 0.35, // Angled slightly toward the center document cards
     rotZ: 0,
     // Dynamics
-    velocity: 0, // Negative = scrolling UP (rising), Positive = scrolling DOWN (falling)
+    velocity: 0, // < 0 means scrolling UP (rising), > 0 means scrolling DOWN (falling)
     direction: 'idle', // 'up' | 'down' | 'idle'
-    flameIntensity: 0, // 0 = off, 1 = max thruster flame
+    flameIntensity: 0, // 0 to 1
     legSwing: 0,
     armSwing: 0,
   });
 
-  // Track window scroll events with high precision
+  // Track window scroll
   useEffect(() => {
-    let ticking = false;
+    let lastY = window.scrollY;
 
     const onScroll = () => {
       const now = Date.now();
       const currentY = window.scrollY;
-      const delta = currentY - scrollYRef.current;
+      const delta = currentY - lastY;
+      lastY = currentY;
 
       scrollYRef.current = currentY;
       scrollDeltaRef.current = delta;
       lastScrollTimeRef.current = now;
-
-      if (!ticking) {
-        ticking = true;
-        requestAnimationFrame(() => {
-          ticking = false;
-        });
-      }
     };
 
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -60,103 +55,111 @@ export function useAstronautMotion({
 
   /**
    * update
-   * Called every frame in useFrame((state, delta) => update(delta, time))
+   * Evaluated inside useFrame((state, delta) => update(delta, time))
    */
   const update = (delta, time) => {
     const m = motionRef.current;
     const now = Date.now();
 
-    // If no scroll event received in 120ms, scroll has halted
-    if (now - lastScrollTimeRef.current > 120) {
+    // Check if scroll stopped (decay to 0 if no scroll event in 100ms)
+    if (now - lastScrollTimeRef.current > 100) {
       scrollDeltaRef.current = 0;
     }
 
-    // Dampen raw scroll delta into smooth velocity
-    const lerpRate = 7.0;
-    m.velocity = THREE.MathUtils.damp(m.velocity, scrollDeltaRef.current, lerpRate, delta);
+    // Also factor in section scrollProgress delta as backup
+    const progressDelta = (scrollProgress - prevProgressRef.current) * 1200;
+    prevProgressRef.current = scrollProgress;
 
-    // Responsive horizontal offset (closer on mobile/tablet)
-    const targetBaseX = isMobile ? 1.6 : basePosition[0];
-    const targetBaseY = isMobile ? 0.9 : basePosition[1];
-    const targetBaseZ = isMobile ? 0.2 : basePosition[2];
+    // Use whichever scroll delta is currently active
+    const rawDelta = Math.abs(scrollDeltaRef.current) > 0.1
+      ? scrollDeltaRef.current
+      : progressDelta;
+
+    // Smoothly dampen velocity
+    m.velocity = THREE.MathUtils.damp(m.velocity, rawDelta, 8.0, delta);
+
+    // Responsive positioning: keep within safe visible bounds
+    const targetBaseX = isMobile ? -1.45 : basePosition[0];
+    const targetBaseY = isMobile ? 0.85 : basePosition[1];
+    const targetBaseZ = isMobile ? 0.45 : basePosition[2];
 
     const motionScale = reducedMotion ? 0.15 : 1.0;
 
-    // Determine motion mode from velocity
-    // Note: scrolling UP means scrollY is decreasing -> velocity < 0
-    // Scrolling DOWN means scrollY is increasing -> velocity > 0
-    if (m.velocity < -0.8 && !reducedMotion) {
-      // 1. SCROLLING UP: RISING WITH JETPACK
+    // Trigger thresholds:
+    // velocity < -0.2 => Scrolling UP (user scrolling toward top of page)
+    // velocity > 0.2  => Scrolling DOWN (user scrolling toward bottom)
+    if (m.velocity < -0.2 && !reducedMotion) {
+      // 1. SCROLLING UP: JETPACK THRUST ACTIVE (RISING)
       m.direction = 'up';
 
-      // Flames ignite and ramp to full intensity
-      m.flameIntensity = THREE.MathUtils.damp(m.flameIntensity, 1.0, 14.0, delta);
+      // Flames ignite immediately and flare up
+      m.flameIntensity = THREE.MathUtils.damp(m.flameIntensity, 1.0, 16.0, delta);
 
-      // Body tilts slightly upward (pitch negative, facing up)
-      const targetRotX = -0.22 * motionScale;
-      const targetRotZ = -0.12 * motionScale;
-      m.rotX = THREE.MathUtils.damp(m.rotX, targetRotX, 8.0, delta);
-      m.rotZ = THREE.MathUtils.damp(m.rotZ, targetRotZ, 8.0, delta);
-      m.rotY = THREE.MathUtils.damp(m.rotY, -0.35, 6.0, delta);
+      // Body tilts slightly upward (pitch negative, facing upward)
+      const targetRotX = -0.28 * motionScale;
+      const targetRotZ = -0.15 * motionScale;
+      m.rotX = THREE.MathUtils.damp(m.rotX, targetRotX, 9.0, delta);
+      m.rotZ = THREE.MathUtils.damp(m.rotZ, targetRotZ, 9.0, delta);
+      m.rotY = THREE.MathUtils.damp(m.rotY, 0.45, 7.0, delta);
 
       // Controlled rise upward
-      const upwardDisplacement = Math.min(0.65, Math.abs(m.velocity) * 0.018) * motionScale;
-      const targetY = targetBaseY + upwardDisplacement;
-      m.y = THREE.MathUtils.damp(m.y, targetY, 6.5, delta);
-      m.x = THREE.MathUtils.damp(m.x, targetBaseX - 0.05, 5.0, delta);
+      const upwardOffset = Math.min(0.55, Math.abs(m.velocity) * 0.015) * motionScale;
+      const targetY = targetBaseY + upwardOffset;
+      m.y = THREE.MathUtils.damp(m.y, targetY, 7.0, delta);
+      m.x = THREE.MathUtils.damp(m.x, targetBaseX - 0.04, 5.0, delta);
 
       // Stabilized legs during rocket thrust
-      m.legSwing = THREE.MathUtils.damp(m.legSwing, 0.12, 10.0, delta);
-      m.armSwing = THREE.MathUtils.damp(m.armSwing, -0.2, 10.0, delta);
+      m.legSwing = THREE.MathUtils.damp(m.legSwing, 0.1, 10.0, delta);
+      m.armSwing = THREE.MathUtils.damp(m.armSwing, -0.22, 10.0, delta);
 
-    } else if (m.velocity > 0.8 && !reducedMotion) {
-      // 2. SCROLLING DOWN: DRIFTING / FALLING WEIGHTLESSLY
+    } else if (m.velocity > 0.2 && !reducedMotion) {
+      // 2. SCROLLING DOWN: ZERO-G DESCENT (FALLING/DRIFTING)
       m.direction = 'down';
 
-      // Thruster flames extinguish smoothly
-      m.flameIntensity = THREE.MathUtils.damp(m.flameIntensity, 0.0, 16.0, delta);
+      // Thruster flames extinguish
+      m.flameIntensity = THREE.MathUtils.damp(m.flameIntensity, 0.0, 14.0, delta);
 
-      // Body leans downward (pitch positive, leaning forward/down)
-      const targetRotX = 0.25 * motionScale;
-      // Weightless roll wobble
-      const targetRotZ = (Math.sin(time * 3.2) * 0.14 + 0.1) * motionScale;
-      m.rotX = THREE.MathUtils.damp(m.rotX, targetRotX, 6.0, delta);
-      m.rotZ = THREE.MathUtils.damp(m.rotZ, targetRotZ, 6.0, delta);
+      // Body pitches forward/downward
+      const targetRotX = 0.3 * motionScale;
+      // Gentle weightless roll wobble
+      const targetRotZ = (Math.sin(time * 3.5) * 0.16 + 0.1) * motionScale;
+      m.rotX = THREE.MathUtils.damp(m.rotX, targetRotX, 7.0, delta);
+      m.rotZ = THREE.MathUtils.damp(m.rotZ, targetRotZ, 7.0, delta);
       m.rotY = THREE.MathUtils.damp(m.rotY, 0.2, 5.0, delta);
 
-      // Drifts downward through the portal
-      const downwardDisplacement = Math.min(0.8, m.velocity * 0.02) * motionScale;
-      const targetY = targetBaseY - downwardDisplacement;
-      m.y = THREE.MathUtils.damp(m.y, targetY, 5.0, delta);
-      m.x = THREE.MathUtils.damp(m.x, targetBaseX + 0.08, 4.0, delta);
+      // Drifts downward
+      const downwardOffset = Math.min(0.7, m.velocity * 0.018) * motionScale;
+      const targetY = targetBaseY - downwardOffset;
+      m.y = THREE.MathUtils.damp(m.y, targetY, 6.0, delta);
+      m.x = THREE.MathUtils.damp(m.x, targetBaseX + 0.05, 5.0, delta);
 
-      // Loose legs drifting weightlessly in zero-g
-      m.legSwing = Math.sin(time * 4.5) * 0.22 * motionScale;
-      m.armSwing = Math.cos(time * 3.8) * 0.18 * motionScale;
+      // Legs drift loosely in zero-g
+      m.legSwing = Math.sin(time * 4.8) * 0.25 * motionScale;
+      m.armSwing = Math.cos(time * 4.0) * 0.2 * motionScale;
 
     } else {
-      // 3. SCROLL STOPPED: GENTLE IDLE HOVERING
+      // 3. SCROLL STOPPED: GENTLE IDLE ZERO-G HOVER
       m.direction = 'idle';
 
-      // Extinguish flames
+      // Flames extinguish smoothly
       m.flameIntensity = THREE.MathUtils.damp(m.flameIntensity, 0.0, 10.0, delta);
 
-      // Subtle zero-gravity breathing / hover oscillation
-      const hoverY = Math.sin(time * 1.8) * 0.045 * motionScale;
-      const hoverRotZ = Math.sin(time * 1.2) * 0.05 * motionScale;
-      const hoverRotX = Math.cos(time * 1.0) * 0.04 * motionScale;
+      // Natural floating hover oscillation
+      const hoverY = Math.sin(time * 2.0) * 0.05 * motionScale;
+      const hoverRotZ = Math.sin(time * 1.4) * 0.06 * motionScale;
+      const hoverRotX = Math.cos(time * 1.2) * 0.05 * motionScale;
 
-      m.rotX = THREE.MathUtils.damp(m.rotX, hoverRotX, 4.0, delta);
-      m.rotZ = THREE.MathUtils.damp(m.rotZ, hoverRotZ, 4.0, delta);
-      m.rotY = THREE.MathUtils.damp(m.rotY, -0.15, 4.0, delta);
+      m.rotX = THREE.MathUtils.damp(m.rotX, hoverRotX, 5.0, delta);
+      m.rotZ = THREE.MathUtils.damp(m.rotZ, hoverRotZ, 5.0, delta);
+      m.rotY = THREE.MathUtils.damp(m.rotY, 0.35, 4.0, delta);
 
-      m.y = THREE.MathUtils.damp(m.y, targetBaseY + hoverY, 4.5, delta);
+      m.y = THREE.MathUtils.damp(m.y, targetBaseY + hoverY, 5.0, delta);
       m.x = THREE.MathUtils.damp(m.x, targetBaseX, 4.0, delta);
       m.z = THREE.MathUtils.damp(m.z, targetBaseZ, 4.0, delta);
 
-      // Gentle limb drift
-      m.legSwing = Math.sin(time * 2.0) * 0.06 * motionScale;
-      m.armSwing = Math.cos(time * 1.6) * 0.05 * motionScale;
+      // Gentle floating limb drift
+      m.legSwing = Math.sin(time * 2.2) * 0.08 * motionScale;
+      m.armSwing = Math.cos(time * 1.8) * 0.06 * motionScale;
     }
 
     return m;
