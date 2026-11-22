@@ -16,8 +16,6 @@ import {
   Pause,
   Layers,
   Info,
-  ShieldAlert,
-  Sliders,
   CheckCircle2
 } from 'lucide-react';
 
@@ -82,13 +80,21 @@ function Physical3DDocumentCards({
 
     // Gentle floating zero-gravity motion (disabled if prefers-reduced-motion)
     const floatFactor = reducedMotion ? 0 : 1;
-    const floatY = Math.sin(time * 1.2) * 0.025 * floatFactor;
-    const floatRotX = Math.sin(time * 0.8) * 0.012 * floatFactor;
-    const floatRotY = Math.cos(time * 1.0) * 0.015 * floatFactor;
+    const floatY = Math.sin(time * 1.2) * 0.02 * floatFactor;
+    const floatRotX = Math.sin(time * 0.8) * 0.01 * floatFactor;
+    const floatRotY = Math.cos(time * 1.0) * 0.012 * floatFactor;
 
-    // Read pointer position from ref without triggering React re-renders!
-    const px = (pointerRef?.current?.x || 0) * (reducedMotion ? 0.02 : 0.12);
-    const py = (pointerRef?.current?.y || 0) * (reducedMotion ? 0.02 : 0.09);
+    // Natural 3D mouse tilt:
+    // Cursor UP (pointer.y > 0) -> Card tilts upward (+0.08 rad)
+    // Cursor DOWN (pointer.y < 0) -> Card tilts downward (-0.08 rad)
+    // Cursor RIGHT (pointer.x > 0) -> Card tilts right (+0.12 rad)
+    // Cursor LEFT (pointer.x < 0) -> Card tilts left (-0.12 rad)
+    const tiltX = (pointerRef?.current?.y || 0) * (reducedMotion ? 0 : 0.08);
+    const tiltY = (pointerRef?.current?.x || 0) * (reducedMotion ? 0 : 0.12);
+
+    // Subtle translation parallax
+    const px = (pointerRef?.current?.x || 0) * (reducedMotion ? 0 : 0.08);
+    const py = (pointerRef?.current?.y || 0) * (reducedMotion ? 0 : 0.06);
 
     // ==============================================================
     // TARGET 3D TRANSFORMS BASED ON ACTIVE COMPARISON MODE
@@ -96,68 +102,80 @@ function Physical3DDocumentCards({
     let targetLeftX = 0;
     let targetLeftY = floatY + py;
     let targetLeftZ = 0;
-    let targetLeftRotY = floatRotY;
+    let targetLeftRotX = floatRotX + tiltX;
+    let targetLeftRotY = floatRotY + tiltY;
 
     let targetRightX = 0;
     let targetRightY = floatY + py;
-    let targetRightZ = 0.005; // Hair in front to prevent z-fighting in merged modes
-    let targetRightRotY = floatRotY;
+    let targetRightZ = 0.004; // Hair in front to prevent z-fighting in merged modes
+    let targetRightRotX = floatRotX + tiltX;
+    let targetRightRotY = floatRotY + tiltY;
 
     if (mode === 'split') {
       // 1. INTERACTIVE SPLIT: Both cards merge into exact center aligned coordinate space
       targetLeftX = px;
       targetLeftY = floatY + py;
-      targetLeftZ = -0.003;
-      targetLeftRotY = floatRotY * 0.5;
+      targetLeftZ = -0.002;
+      targetLeftRotX = floatRotX + tiltX;
+      targetLeftRotY = floatRotY * 0.5 + tiltY;
 
       targetRightX = px;
       targetRightY = floatY + py;
-      targetRightZ = 0.003;
-      targetRightRotY = floatRotY * 0.5;
+      targetRightZ = 0.002;
+      targetRightRotX = floatRotX + tiltX;
+      targetRightRotY = floatRotY * 0.5 + tiltY;
     } else if (mode === 'side-by-side') {
       // 2. SIDE-BY-SIDE: Physically separate into two independent 3D cards rotating outward
+      const baseOutwardRot = isMobile ? 0 : 0.14;
       targetLeftX = -sepX + px;
       targetLeftY = floatY + py;
-      targetLeftZ = 0.06;
-      targetLeftRotY = (isMobile ? 0 : 0.14) + floatRotY;
+      targetLeftZ = 0.05;
+      targetLeftRotX = floatRotX + tiltX;
+      targetLeftRotY = baseOutwardRot + floatRotY + tiltY;
 
       targetRightX = sepX + px;
       targetRightY = floatY + py;
-      targetRightZ = 0.06;
-      targetRightRotY = (isMobile ? 0 : -0.14) + floatRotY;
+      targetRightZ = 0.05;
+      targetRightRotX = floatRotX + tiltX;
+      targetRightRotY = -baseOutwardRot + floatRotY + tiltY;
     } else if (mode === 'laser-reveal') {
       // 3. LASER REVEAL: Overlapping cards; original slightly behind, restored slightly forward
       targetLeftX = px;
       targetLeftY = floatY + py;
-      targetLeftZ = -0.06;
-      targetLeftRotY = floatRotY * 0.5;
+      targetLeftZ = -0.05;
+      targetLeftRotX = floatRotX + tiltX;
+      targetLeftRotY = floatRotY * 0.5 + tiltY;
 
       targetRightX = px;
       targetRightY = floatY + py;
-      targetRightZ = 0.06;
-      targetRightRotY = floatRotY * 0.5;
+      targetRightZ = 0.05;
+      targetRightRotX = floatRotX + tiltX;
+      targetRightRotY = floatRotY * 0.5 + tiltY;
     } else if (mode === 'inspector') {
       // 4. DETAIL INSPECTOR: Separated cards facing frontally for synchronized magnification
+      const baseInspectorRot = isMobile ? 0 : 0.05;
       targetLeftX = -sepX + px;
       targetLeftY = floatY + py;
       targetLeftZ = 0.02;
-      targetLeftRotY = (isMobile ? 0 : 0.06) + floatRotY;
+      targetLeftRotX = floatRotX + tiltX;
+      targetLeftRotY = baseInspectorRot + floatRotY + tiltY;
 
       targetRightX = sepX + px;
       targetRightY = floatY + py;
       targetRightZ = 0.02;
-      targetRightRotY = (isMobile ? 0 : -0.06) + floatRotY;
+      targetRightRotX = floatRotX + tiltX;
+      targetRightRotY = -baseInspectorRot + floatRotY + tiltY;
     }
 
     const finalScale = zoomLevel * (isMobile ? 0.9 : 1.0);
-    const lerpSpeed = reducedMotion ? 18 : 7.5;
+    const lerpSpeed = reducedMotion ? 18 : 8.0;
 
     // Smoothly animate Left Card (Original Degraded)
     if (leftCardRef.current) {
       leftCardRef.current.position.x = THREE.MathUtils.damp(leftCardRef.current.position.x, targetLeftX, lerpSpeed, delta);
       leftCardRef.current.position.y = THREE.MathUtils.damp(leftCardRef.current.position.y, targetLeftY, lerpSpeed, delta);
       leftCardRef.current.position.z = THREE.MathUtils.damp(leftCardRef.current.position.z, targetLeftZ, lerpSpeed, delta);
-      leftCardRef.current.rotation.x = THREE.MathUtils.damp(leftCardRef.current.rotation.x, floatRotX, lerpSpeed, delta);
+      leftCardRef.current.rotation.x = THREE.MathUtils.damp(leftCardRef.current.rotation.x, targetLeftRotX, lerpSpeed, delta);
       leftCardRef.current.rotation.y = THREE.MathUtils.damp(leftCardRef.current.rotation.y, targetLeftRotY, lerpSpeed, delta);
       leftCardRef.current.scale.setScalar(THREE.MathUtils.damp(leftCardRef.current.scale.x, finalScale, lerpSpeed, delta));
     }
@@ -167,7 +185,7 @@ function Physical3DDocumentCards({
       rightCardRef.current.position.x = THREE.MathUtils.damp(rightCardRef.current.position.x, targetRightX, lerpSpeed, delta);
       rightCardRef.current.position.y = THREE.MathUtils.damp(rightCardRef.current.position.y, targetRightY, lerpSpeed, delta);
       rightCardRef.current.position.z = THREE.MathUtils.damp(rightCardRef.current.position.z, targetRightZ, lerpSpeed, delta);
-      rightCardRef.current.rotation.x = THREE.MathUtils.damp(rightCardRef.current.rotation.x, floatRotX, lerpSpeed, delta);
+      rightCardRef.current.rotation.x = THREE.MathUtils.damp(rightCardRef.current.rotation.x, targetRightRotX, lerpSpeed, delta);
       rightCardRef.current.rotation.y = THREE.MathUtils.damp(rightCardRef.current.rotation.y, targetRightRotY, lerpSpeed, delta);
       rightCardRef.current.scale.setScalar(THREE.MathUtils.damp(rightCardRef.current.scale.x, finalScale, lerpSpeed, delta));
     }
@@ -180,6 +198,8 @@ function Physical3DDocumentCards({
         divider3DRef.current.position.x = splitOffset + px;
         divider3DRef.current.position.y = floatY + py;
         divider3DRef.current.position.z = 0.015;
+        divider3DRef.current.rotation.x = targetRightRotX;
+        divider3DRef.current.rotation.y = targetRightRotY;
         divider3DRef.current.visible = true;
       }
     } else {
@@ -195,6 +215,8 @@ function Physical3DDocumentCards({
         laserBeamRef.current.position.x = laserOffset + px;
         laserBeamRef.current.position.y = floatY + py;
         laserBeamRef.current.position.z = 0.08;
+        laserBeamRef.current.rotation.x = targetRightRotX;
+        laserBeamRef.current.rotation.y = targetRightRotY;
         laserBeamRef.current.visible = true;
       }
     } else {
@@ -216,9 +238,9 @@ function Physical3DDocumentCards({
       {/* 3D DOCUMENT CARD 1: ORIGINAL DEGRADED (1987 ARCHIVE)           */}
       {/* ============================================================== */}
       <group ref={leftCardRef} position={[mode === 'side-by-side' ? -sepX : 0, 0, 0]}>
-        {/* Physical Shallow Card Slab Base */}
-        <mesh castShadow receiveShadow>
-          <boxGeometry args={[docW, docH, 0.022]} />
+        {/* Physical Shallow Card Slab Base (Positioned cleanly behind surface) */}
+        <mesh position={[0, 0, -0.011]} castShadow receiveShadow>
+          <boxGeometry args={[docW, docH, 0.02]} />
           <meshStandardMaterial
             color="#0B1117"
             roughness={0.45}
@@ -226,22 +248,29 @@ function Physical3DDocumentCards({
           />
         </mesh>
 
-        {/* Front Textured Surface */}
-        <mesh position={[0, 0, 0.012]}>
+        {/* Front Textured Surface with Guaranteed Texture Binding */}
+        <mesh position={[0, 0, 0.002]}>
           <planeGeometry args={[docW * 0.985, docH * 0.985]} />
           {textures.original ? (
             <meshStandardMaterial
+              key={`orig-tex-${textures.original.uuid}`}
               map={textures.original}
-              roughness={0.35}
-              metalness={0.12}
+              color="#FFFFFF"
+              roughness={0.3}
+              metalness={0.08}
+              toneMapped={false}
             />
           ) : (
-            <meshStandardMaterial color="#17232C" />
+            <meshStandardMaterial
+              key="orig-loading"
+              color="#101820"
+              roughness={0.5}
+            />
           )}
         </mesh>
 
         {/* Amber Precision Edge Rim (Archival Indicator) */}
-        <lineSegments position={[0, 0, 0.014]}>
+        <lineSegments position={[0, 0, 0.004]}>
           <edgesGeometry args={[new THREE.PlaneGeometry(docW, docH)]} />
           <lineBasicMaterial
             color="#FFB547"
@@ -254,7 +283,7 @@ function Physical3DDocumentCards({
         {/* Corner Alignment Crosshairs */}
         {[-docW / 2, docW / 2].map((cx, i) =>
           [-docH / 2, docH / 2].map((cy, j) => (
-            <mesh key={`l-cross-${i}-${j}`} position={[cx, cy, 0.015]}>
+            <mesh key={`l-cross-${i}-${j}`} position={[cx, cy, 0.005]}>
               <ringGeometry args={[0.025, 0.055, 12]} />
               <meshBasicMaterial color="#FFB547" transparent opacity={0.7} />
             </mesh>
@@ -265,10 +294,10 @@ function Physical3DDocumentCards({
       {/* ============================================================== */}
       {/* 3D DOCUMENT CARD 2: RESTORED DIGITAL ASSET (IDRESTORE AI)       */}
       {/* ============================================================== */}
-      <group ref={rightCardRef} position={[mode === 'side-by-side' ? sepX : 0, 0, 0.005]}>
+      <group ref={rightCardRef} position={[mode === 'side-by-side' ? sepX : 0, 0, 0.004]}>
         {/* Physical Shallow Card Slab Base */}
-        <mesh castShadow receiveShadow>
-          <boxGeometry args={[docW, docH, 0.022]} />
+        <mesh position={[0, 0, -0.011]} castShadow receiveShadow>
+          <boxGeometry args={[docW, docH, 0.02]} />
           <meshStandardMaterial
             color="#0B1117"
             roughness={0.25}
@@ -279,23 +308,30 @@ function Physical3DDocumentCards({
         </mesh>
 
         {/* Front Textured Surface with Local Clipping Plane */}
-        <mesh position={[0, 0, 0.012]}>
+        <mesh position={[0, 0, 0.002]}>
           <planeGeometry args={[docW * 0.985, docH * 0.985]} />
           {textures.restored ? (
             <meshStandardMaterial
+              key={`rest-tex-${textures.restored.uuid}`}
               map={textures.restored}
+              color="#FFFFFF"
               roughness={0.15}
-              metalness={0.25}
+              metalness={0.15}
               clippingPlanes={activeClippingPlanes}
               clipShadows
+              toneMapped={false}
             />
           ) : (
-            <meshStandardMaterial color="#101820" />
+            <meshStandardMaterial
+              key="rest-loading"
+              color="#101820"
+              roughness={0.5}
+            />
           )}
         </mesh>
 
         {/* Electric Cyan / Laser Mint Glow Rim */}
-        <lineSegments position={[0, 0, 0.014]}>
+        <lineSegments position={[0, 0, 0.004]}>
           <edgesGeometry args={[new THREE.PlaneGeometry(docW, docH)]} />
           <lineBasicMaterial
             color="#00FFA3"
@@ -308,7 +344,7 @@ function Physical3DDocumentCards({
         {/* Corner Hologram Rings */}
         {[-docW / 2, docW / 2].map((cx, i) =>
           [-docH / 2, docH / 2].map((cy, j) => (
-            <mesh key={`r-ring-${i}-${j}`} position={[cx, cy, 0.015]}>
+            <mesh key={`r-ring-${i}-${j}`} position={[cx, cy, 0.005]}>
               <ringGeometry args={[0.025, 0.055, 12]} />
               <meshBasicMaterial color="#00E5FF" transparent opacity={0.85} />
             </mesh>
@@ -454,16 +490,14 @@ function ChamberAtmosphericDust({ count = 35 }) {
   );
 }
 
-// Camera Rig: Subtle scroll and pointer responsiveness without jarring motion
-function CameraRig({ pointerRef, scrollProgress = 0, reducedMotion = false }) {
+// Camera Rig: Anchored position with subtle scroll progress (NO cursor fighting)
+function CameraRig({ scrollProgress = 0, reducedMotion = false }) {
   useFrame((state, delta) => {
     if (reducedMotion) return;
-    const px = (pointerRef?.current?.x || 0) * 0.2;
-    const py = (pointerRef?.current?.y || 0) * 0.15;
-    const scrollAngle = (scrollProgress - 0.5) * 0.2;
-
-    state.camera.position.x = THREE.MathUtils.damp(state.camera.position.x, px, 4, delta);
-    state.camera.position.y = THREE.MathUtils.damp(state.camera.position.y, py + scrollAngle * 0.3, 4, delta);
+    const scrollAngle = (scrollProgress - 0.5) * 0.15;
+    // Maintain stable camera orientation; card tilts naturally via its own rotation
+    state.camera.position.x = THREE.MathUtils.damp(state.camera.position.x, 0, 4, delta);
+    state.camera.position.y = THREE.MathUtils.damp(state.camera.position.y, scrollAngle, 4, delta);
     state.camera.lookAt(0, 0, 0);
   });
 
@@ -555,16 +589,20 @@ export default function RestorationChamber3D({
     };
   }, []);
 
-  // Safe Texture Loading & Memory Leak Disposal
+  // Robust Parallel Texture Loading with Guaranteed Fallback
   useEffect(() => {
     let isMounted = true;
     const loader = new THREE.TextureLoader();
-    const origUrl = demoData?.original_url || '/samples/demo_original_degraded.jpg';
-    const restUrl = demoData?.restored_url || '/samples/demo_restored_clean.jpg';
+
+    // URLs with fallback to bundled public benchmark samples
+    const origPrimary = demoData?.original_url || '/samples/demo_original_degraded.jpg';
+    const restPrimary = demoData?.restored_url || '/samples/demo_restored_clean.jpg';
+    const origFallback = '/samples/demo_original_degraded.jpg';
+    const restFallback = '/samples/demo_restored_clean.jpg';
 
     setImgMeta((prev) => ({ ...prev, status: 'LOADING' }));
 
-    // Read actual natural dimensions from image asset
+    // Read natural dimensions
     const imgMeasure = new Image();
     imgMeasure.onload = () => {
       if (!isMounted) return;
@@ -581,53 +619,62 @@ export default function RestorationChamber3D({
       if (!isMounted) return;
       setImgMeta((prev) => ({ ...prev, status: 'FALLBACK' }));
     };
-    imgMeasure.src = origUrl;
+    imgMeasure.src = origPrimary;
 
-    // Load Three.js Textures with error handling and proper disposal
-    loader.load(
-      origUrl,
-      (origTex) => {
-        if (!isMounted) {
-          origTex.dispose();
-          return;
-        }
-        origTex.colorSpace = THREE.SRGBColorSpace;
-        origTex.minFilter = THREE.LinearFilter;
-        origTex.generateMipmaps = false;
-
-        loader.load(
-          restUrl,
-          (restTex) => {
-            if (!isMounted) {
-              origTex.dispose();
-              restTex.dispose();
-              return;
-            }
-            restTex.colorSpace = THREE.SRGBColorSpace;
-            restTex.minFilter = THREE.LinearFilter;
-            restTex.generateMipmaps = false;
-
-            setTextures((prev) => {
-              if (prev.original) prev.original.dispose();
-              if (prev.restored) prev.restored.dispose();
-              return { original: origTex, restored: restTex };
-            });
-          },
-          undefined,
-          (err) => {
-            console.warn('Could not load restored texture:', err);
-            if (!isMounted) return;
-            setImgMeta((prev) => ({ ...prev, status: 'ERROR' }));
+    // Helper to load texture with automatic fallback
+    const loadTextureSafe = (primaryUrl, fallbackUrl, onSuccess) => {
+      loader.load(
+        primaryUrl,
+        (tex) => {
+          if (!isMounted) { tex.dispose(); return; }
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.minFilter = THREE.LinearFilter;
+          tex.generateMipmaps = false;
+          tex.needsUpdate = true;
+          onSuccess(tex);
+        },
+        undefined,
+        (err) => {
+          console.warn(`Could not load primary texture from ${primaryUrl}, trying fallback ${fallbackUrl}:`, err);
+          if (primaryUrl !== fallbackUrl) {
+            loader.load(
+              fallbackUrl,
+              (fallbackTex) => {
+                if (!isMounted) { fallbackTex.dispose(); return; }
+                fallbackTex.colorSpace = THREE.SRGBColorSpace;
+                fallbackTex.minFilter = THREE.LinearFilter;
+                fallbackTex.generateMipmaps = false;
+                fallbackTex.needsUpdate = true;
+                onSuccess(fallbackTex);
+              },
+              undefined,
+              (fallbackErr) => {
+                console.error(`Fatal: Failed fallback texture from ${fallbackUrl}:`, fallbackErr);
+                if (isMounted) setImgMeta((prev) => ({ ...prev, status: 'ERROR' }));
+              }
+            );
+          } else {
+            if (isMounted) setImgMeta((prev) => ({ ...prev, status: 'ERROR' }));
           }
-        );
-      },
-      undefined,
-      (err) => {
-        console.warn('Could not load original texture:', err);
-        if (!isMounted) return;
-        setImgMeta((prev) => ({ ...prev, status: 'ERROR' }));
-      }
-    );
+        }
+      );
+    };
+
+    // Load original degraded texture
+    loadTextureSafe(origPrimary, origFallback, (origTex) => {
+      setTextures((prev) => {
+        if (prev.original) prev.original.dispose();
+        return { ...prev, original: origTex };
+      });
+    });
+
+    // Load restored enhanced texture
+    loadTextureSafe(restPrimary, restFallback, (restTex) => {
+      setTextures((prev) => {
+        if (prev.restored) prev.restored.dispose();
+        return { ...prev, restored: restTex };
+      });
+    });
 
     return () => {
       isMounted = false;
@@ -645,14 +692,24 @@ export default function RestorationChamber3D({
     };
   }, []);
 
-  // Performance-optimized Pointer Tracker (Stores in pointerRef, NO React re-renders!)
+  // Natural Pointer Tracker:
+  // Cursor UP -> normY is POSITIVE (+1)
+  // Cursor DOWN -> normY is NEGATIVE (-1)
+  // Cursor RIGHT -> normX is POSITIVE (+1)
+  // Cursor LEFT -> normX is NEGATIVE (-1)
   const handlePointerMove = useCallback((e) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    const y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-    pointerRef.current.x = Math.max(-1, Math.min(1, x));
-    pointerRef.current.y = Math.max(-1, Math.min(1, y));
+    const normX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const normY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    pointerRef.current.x = Math.max(-1, Math.min(1, normX));
+    pointerRef.current.y = Math.max(-1, Math.min(1, normY));
+  }, []);
+
+  // Smooth neutral return when pointer leaves the container
+  const handlePointerLeave = useCallback(() => {
+    pointerRef.current.x = 0;
+    pointerRef.current.y = 0;
   }, []);
 
   // ==============================================================
@@ -779,7 +836,7 @@ export default function RestorationChamber3D({
 
   const handleDownload = () => {
     const link = document.createElement('a');
-    link.href = demoData?.restored_url || '/samples/demo_restored_clean.jpg';
+    link.href = textures.restored?.image?.src || demoData?.restored_url || '/samples/demo_restored_clean.jpg';
     link.download = demoData?.original_filename
       ? `IDRestore_${demoData.original_filename}`
       : 'Restored_Employee_Record_1987.jpg';
@@ -823,6 +880,7 @@ export default function RestorationChamber3D({
       role="region"
       aria-label="3D Restoration Chamber Comparison Portal"
       onPointerMove={handlePointerMove}
+      onPointerLeave={handlePointerLeave}
       onKeyDown={(e) => {
         if (mode === 'split') handleSplitKeyDown(e);
         if (mode === 'inspector') handleInspectorKeyDown(e);
@@ -863,6 +921,8 @@ export default function RestorationChamber3D({
             <span className={`px-2 py-0.5 rounded text-[10px] ${
               imgMeta.status === 'READY'
                 ? 'bg-[#00FFA3]/15 text-[#00FFA3] border border-[#00FFA3]/30'
+                : imgMeta.status === 'ERROR'
+                ? 'bg-[#FF5C5C]/15 text-[#FF5C5C] border border-[#FF5C5C]/30'
                 : 'bg-[#FFB547]/15 text-[#FFB547] border border-[#FFB547]/30'
             }`}>
               {imgMeta.status}
@@ -978,14 +1038,13 @@ export default function RestorationChamber3D({
             <ChamberGimbalRings />
             <ChamberAtmosphericDust count={30} />
 
-            {/* Camera subtle cinematic tilt */}
+            {/* Camera: Anchored view without parallax inversion */}
             <CameraRig
-              pointerRef={pointerRef}
               scrollProgress={scrollProgress}
               reducedMotion={reducedMotion}
             />
 
-            {/* The Physical 3D Document Cards that Reconfigure on Mode Selection */}
+            {/* The Physical 3D Document Cards with Natural Mouse Tilt */}
             <Physical3DDocumentCards
               mode={mode}
               splitPos={splitPos}
@@ -1142,7 +1201,7 @@ export default function RestorationChamber3D({
                   <div
                     className="w-full h-full"
                     style={{
-                      backgroundImage: `url(${demoData?.original_url || '/samples/demo_original_degraded.jpg'})`,
+                      backgroundImage: `url(${textures.original?.image?.src || demoData?.original_url || '/samples/demo_original_degraded.jpg'})`,
                       backgroundPosition: `${inspectorCoords.x * 100}% ${inspectorCoords.y * 100}%`,
                       backgroundSize: `${260 * zoomLevel}%`,
                       backgroundRepeat: 'no-repeat',
@@ -1162,7 +1221,7 @@ export default function RestorationChamber3D({
                   <div
                     className="w-full h-full"
                     style={{
-                      backgroundImage: `url(${demoData?.restored_url || '/samples/demo_restored_clean.jpg'})`,
+                      backgroundImage: `url(${textures.restored?.image?.src || demoData?.restored_url || '/samples/demo_restored_clean.jpg'})`,
                       backgroundPosition: `${inspectorCoords.x * 100}% ${inspectorCoords.y * 100}%`,
                       backgroundSize: `${260 * zoomLevel}%`,
                       backgroundRepeat: 'no-repeat',
