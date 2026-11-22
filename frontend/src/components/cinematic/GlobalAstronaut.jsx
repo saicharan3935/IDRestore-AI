@@ -74,6 +74,7 @@ export default function GlobalAstronaut({
 }) {
   const rootRef = useRef();
   const helmetRef = useRef();
+  const lightRef = useRef();
   const leftFlameRef = useRef();
   const rightFlameRef = useRef();
   const leftOuterFlameRef = useRef();
@@ -102,12 +103,28 @@ export default function GlobalAstronaut({
 
     if (!rootRef.current) return;
 
-    // Apply global world position & rotation
+    // Apply global world position & rotation inside safe side lane
     rootRef.current.position.set(m.x, m.y, m.z);
     rootRef.current.rotation.set(m.rotX, m.rotY, m.rotZ);
     rootRef.current.scale.set(m.scale, m.scale, m.scale);
 
-    // Subtle helmet glance toward user cursor
+    // Dynamic material opacity modulation during lane cross-over transitions
+    if (m.opacity !== undefined) {
+      rootRef.current.traverse((child) => {
+        if (child.isMesh && child.material) {
+          if (child.material.userData.baseOpacity === undefined) {
+            child.material.userData.baseOpacity = child.material.opacity ?? 1.0;
+          }
+          child.material.transparent = true;
+          child.material.opacity = m.opacity * child.material.userData.baseOpacity;
+        }
+      });
+      if (lightRef.current) {
+        lightRef.current.intensity = 2.6 * m.opacity;
+      }
+    }
+
+    // Subtle helmet glance toward user cursor (confined strictly to head)
     if (helmetRef.current) {
       helmetRef.current.rotation.y = m.helmetLookX;
       helmetRef.current.rotation.x = m.helmetLookY;
@@ -174,7 +191,7 @@ export default function GlobalAstronaut({
       if (leftLegRef.current) leftLegRef.current.rotation.x = 0.55;
       if (rightLegRef.current) rightLegRef.current.rotation.x = 0.55;
     } else {
-      // Standard zero-gravity floating limbs
+      // Standard zero-gravity floating limbs in safe lane
       if (leftLegRef.current) leftLegRef.current.rotation.x = m.legSwing;
       if (rightLegRef.current) rightLegRef.current.rotation.x = -m.legSwing * 0.85;
       if (leftArmRef.current) {
@@ -198,11 +215,11 @@ export default function GlobalAstronaut({
   return (
     <group
       ref={rootRef}
-      // Disable pointer raycasting completely so astronaut never steals clicks or slider drags
+      // Disable pointer raycasting completely so astronaut never steals clicks or drags
       raycast={() => null}
     >
-      {/* Dedicated Local Point Light to Guarantee High Contrast & Crisp Visibility */}
-      <pointLight position={[0, 0.4, 0.6]} intensity={2.6} color="#00E5FF" distance={4.5} />
+      {/* Dedicated Local Point Light */}
+      <pointLight ref={lightRef} position={[0, 0.4, 0.6]} intensity={2.6} color="#00E5FF" distance={4.5} />
 
       {/* Floating Holographic Cyber Halo above Helmet */}
       <group position={[0, 0.64, 0]} rotation={[Math.PI / 2.5, 0, 0]}>
@@ -224,6 +241,8 @@ export default function GlobalAstronaut({
             roughness={0.2}
             metalness={0.6}
             envMapIntensity={1.5}
+            transparent
+            opacity={1.0}
           />
         </mesh>
 
@@ -236,6 +255,8 @@ export default function GlobalAstronaut({
             metalness={0.98}
             emissive="#00E5FF"
             emissiveIntensity={0.65}
+            transparent
+            opacity={1.0}
           />
         </mesh>
 
@@ -248,11 +269,11 @@ export default function GlobalAstronaut({
         {/* Side Comms / Audio Ear Pods */}
         <mesh position={[-0.21, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.038, 0.038, 0.045, 16]} />
-          <meshStandardMaterial color="#101820" roughness={0.3} metalness={0.85} />
+          <meshStandardMaterial color="#101820" roughness={0.3} metalness={0.85} transparent opacity={1.0} />
         </mesh>
         <mesh position={[0.21, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
           <cylinderGeometry args={[0.038, 0.038, 0.045, 16]} />
-          <meshStandardMaterial color="#101820" roughness={0.3} metalness={0.85} />
+          <meshStandardMaterial color="#101820" roughness={0.3} metalness={0.85} transparent opacity={1.0} />
         </mesh>
       </group>
 
@@ -267,6 +288,8 @@ export default function GlobalAstronaut({
             color="#E2E8F0"
             roughness={0.28}
             metalness={0.4}
+            transparent
+            opacity={1.0}
           />
         </mesh>
 
@@ -278,13 +301,15 @@ export default function GlobalAstronaut({
             emissive="#00FFA3"
             emissiveIntensity={2.5}
             roughness={0.2}
+            transparent
+            opacity={1.0}
           />
         </mesh>
 
         {/* Graphite Utility Belt */}
         <mesh position={[0, -0.1, 0]}>
           <cylinderGeometry args={[0.17, 0.17, 0.045, 20]} />
-          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.85} />
+          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.85} transparent opacity={1.0} />
         </mesh>
       </group>
 
@@ -295,23 +320,23 @@ export default function GlobalAstronaut({
         {/* Jetpack Main Pack Body */}
         <mesh position={[0, 0, 0]}>
           <boxGeometry args={[0.23, 0.25, 0.085]} />
-          <meshStandardMaterial color="#101820" roughness={0.25} metalness={0.88} />
+          <meshStandardMaterial color="#101820" roughness={0.25} metalness={0.88} transparent opacity={1.0} />
         </mesh>
 
         {/* Twin Fuel Canisters */}
         <mesh position={[-0.085, 0, 0.01]}>
           <cylinderGeometry args={[0.044, 0.044, 0.27, 16]} />
-          <meshStandardMaterial color="#17232C" roughness={0.3} metalness={0.85} />
+          <meshStandardMaterial color="#17232C" roughness={0.3} metalness={0.85} transparent opacity={1.0} />
         </mesh>
         <mesh position={[0.085, 0, 0.01]}>
           <cylinderGeometry args={[0.044, 0.044, 0.27, 16]} />
-          <meshStandardMaterial color="#17232C" roughness={0.3} metalness={0.85} />
+          <meshStandardMaterial color="#17232C" roughness={0.3} metalness={0.85} transparent opacity={1.0} />
         </mesh>
 
         {/* Thruster Nozzle Left */}
         <mesh position={[-0.085, -0.155, 0.01]} rotation={[Math.PI, 0, 0]}>
           <coneGeometry args={[0.044, 0.065, 16]} />
-          <meshStandardMaterial color="#0B1117" roughness={0.2} metalness={0.92} />
+          <meshStandardMaterial color="#0B1117" roughness={0.2} metalness={0.92} transparent opacity={1.0} />
         </mesh>
         {/* Thruster Pilot Ring Left (Idle Glow) */}
         <mesh position={[-0.085, -0.185, 0.01]} rotation={[Math.PI / 2, 0, 0]}>
@@ -322,7 +347,7 @@ export default function GlobalAstronaut({
         {/* Thruster Nozzle Right */}
         <mesh position={[0.085, -0.155, 0.01]} rotation={[Math.PI, 0, 0]}>
           <coneGeometry args={[0.044, 0.065, 16]} />
-          <meshStandardMaterial color="#0B1117" roughness={0.2} metalness={0.92} />
+          <meshStandardMaterial color="#0B1117" roughness={0.2} metalness={0.92} transparent opacity={1.0} />
         </mesh>
         {/* Thruster Pilot Ring Right (Idle Glow) */}
         <mesh position={[0.085, -0.185, 0.01]} rotation={[Math.PI / 2, 0, 0]}>
@@ -338,6 +363,8 @@ export default function GlobalAstronaut({
             emissive="#00E5FF"
             emissiveIntensity={3.8}
             roughness={0.1}
+            transparent
+            opacity={1.0}
           />
         </mesh>
 
@@ -360,6 +387,8 @@ export default function GlobalAstronaut({
             emissive="#00E5FF"
             emissiveIntensity={3.8}
             roughness={0.1}
+            transparent
+            opacity={1.0}
           />
         </mesh>
 
@@ -385,12 +414,12 @@ export default function GlobalAstronaut({
       <group ref={leftArmRef} position={[-0.2, 0.12, 0]}>
         <mesh position={[-0.04, -0.1, 0.02]} rotation={[0.2, 0, 0.3]}>
           <capsuleGeometry args={[0.04, 0.15, 10, 10]} />
-          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} />
+          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} transparent opacity={1.0} />
         </mesh>
         {/* Glove */}
         <mesh position={[-0.08, -0.21, 0.04]}>
           <sphereGeometry args={[0.048, 12, 12]} />
-          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.75} />
+          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.75} transparent opacity={1.0} />
         </mesh>
       </group>
 
@@ -398,12 +427,12 @@ export default function GlobalAstronaut({
       <group ref={rightArmRef} position={[0.2, 0.12, 0]}>
         <mesh position={[0.04, -0.1, 0.02]} rotation={[0.2, 0, -0.3]}>
           <capsuleGeometry args={[0.04, 0.15, 10, 10]} />
-          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} />
+          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} transparent opacity={1.0} />
         </mesh>
         {/* Glove */}
         <mesh position={[0.08, -0.21, 0.04]}>
           <sphereGeometry args={[0.048, 12, 12]} />
-          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.75} />
+          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.75} transparent opacity={1.0} />
         </mesh>
       </group>
 
@@ -414,12 +443,12 @@ export default function GlobalAstronaut({
       <group ref={leftLegRef} position={[-0.09, -0.16, 0]}>
         <mesh position={[0, -0.11, 0.02]}>
           <capsuleGeometry args={[0.048, 0.15, 10, 10]} />
-          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} />
+          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} transparent opacity={1.0} />
         </mesh>
         {/* Boot */}
         <mesh position={[0, -0.21, 0.04]}>
           <boxGeometry args={[0.07, 0.055, 0.11]} />
-          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.85} />
+          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.85} transparent opacity={1.0} />
         </mesh>
       </group>
 
@@ -427,12 +456,12 @@ export default function GlobalAstronaut({
       <group ref={rightLegRef} position={[0.09, -0.16, 0]}>
         <mesh position={[0, -0.11, 0.02]}>
           <capsuleGeometry args={[0.048, 0.15, 10, 10]} />
-          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} />
+          <meshStandardMaterial color="#E2E8F0" roughness={0.3} metalness={0.35} transparent opacity={1.0} />
         </mesh>
         {/* Boot */}
         <mesh position={[0, -0.21, 0.04]}>
           <boxGeometry args={[0.07, 0.055, 0.11]} />
-          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.85} />
+          <meshStandardMaterial color="#101820" roughness={0.35} metalness={0.85} transparent opacity={1.0} />
         </mesh>
       </group>
     </group>
