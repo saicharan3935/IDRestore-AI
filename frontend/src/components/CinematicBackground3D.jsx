@@ -347,7 +347,136 @@ function AsteroidParticleTrail({ opacity = 0.0, asteroidPosition = [0, 0, 0] }) 
   );
 }
 
-// 6. GLOBAL COSMIC PARTICLE FIELD (PERSISTENT BEHIND ENTIRE PAGE)
+// 6. DOCUMENT-TO-PARTICLE DISSOLVE & RECONSTRUCTION STREAM (EXPERIENCE 2)
+function DocumentParticleDissolveStream({ scrollProgress = 0 }) {
+  const pointsRef = useRef();
+  const count = 320;
+
+  // Precompute initial document planar grid coordinates and destination dual-panel targets
+  const [initialData] = useMemo(() => {
+    const gridCols = 20;
+    const gridRows = 16;
+    const initialPos = new Float32Array(count * 3);
+    const destPos = new Float32Array(count * 3);
+    const velocities = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+
+    const cyan = new THREE.Color('#00E5FF');
+    const mint = new THREE.Color('#00FFA3');
+    const platinum = new THREE.Color('#DCE7EC');
+
+    for (let i = 0; i < count; i++) {
+      // Document planar grid (Stage: end of laboratory)
+      const col = i % gridCols;
+      const row = Math.floor(i / gridCols);
+      const u = (col / (gridCols - 1) - 0.5) * 3.2; // width
+      const v = (row / (gridRows - 1) - 0.5) * 2.2; // height
+
+      initialPos[i * 3] = u;
+      initialPos[i * 3 + 1] = v;
+      initialPos[i * 3 + 2] = 0.1;
+
+      // Destination targets (bifurcates into dual panels for Before/After portal: Left = Original, Right = Restored)
+      const isLeft = i % 2 === 0;
+      const panelCenterX = isLeft ? -1.6 : 1.6;
+      destPos[i * 3] = panelCenterX + (col / (gridCols - 1) - 0.5) * 1.8;
+      destPos[i * 3 + 1] = v * 0.85;
+      destPos[i * 3 + 2] = 0.2;
+
+      // Dispersal curl offsets
+      velocities[i * 3] = (Math.random() - 0.5) * 2.5;
+      velocities[i * 3 + 1] = -(1.2 + Math.random() * 2.0); // downward stream
+      velocities[i * 3 + 2] = (Math.random() - 0.5) * 1.5;
+
+      // Color variation
+      const colPick = Math.random();
+      const c = colPick > 0.5 ? cyan : colPick > 0.2 ? mint : platinum;
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    }
+
+    return [{ initialPos, destPos, velocities, colors }];
+  }, [count]);
+
+  useFrame(() => {
+    if (!pointsRef.current) return;
+    const pos = pointsRef.current.geometry.attributes.position.array;
+    const p = scrollProgress;
+
+    // Active during scroll between laboratory and comparison portal (p in [0.42, 0.72])
+    const startP = 0.42;
+    const endP = 0.72;
+
+    if (p < startP - 0.05 || p > endP + 0.05) {
+      pointsRef.current.visible = false;
+      return;
+    }
+    pointsRef.current.visible = true;
+
+    const t = Math.max(0, Math.min(1, (p - startP) / (endP - startP)));
+
+    for (let i = 0; i < count; i++) {
+      const initX = initialData.initialPos[i * 3];
+      const initY = initialData.initialPos[i * 3 + 1];
+      const initZ = initialData.initialPos[i * 3 + 2];
+
+      const destX = initialData.destPos[i * 3];
+      const destY = initialData.destPos[i * 3 + 1];
+      const destZ = initialData.destPos[i * 3 + 2];
+
+      // Dynamic curve:
+      // When t < 0.5: dissolves and streams downward with curl noise
+      // When t >= 0.5: gathers and reconstructs into destination panels
+      if (t < 0.5) {
+        const subT = t / 0.5;
+        pos[i * 3] = initX + initialData.velocities[i * 3] * Math.sin(subT * Math.PI) * 0.8;
+        pos[i * 3 + 1] = initY + initialData.velocities[i * 3 + 1] * subT * 1.5;
+        pos[i * 3 + 2] = initZ + initialData.velocities[i * 3 + 2] * subT * 0.6;
+      } else {
+        const subT = (t - 0.5) / 0.5;
+        const midX = initX + initialData.velocities[i * 3] * 0.8;
+        const midY = initY + initialData.velocities[i * 3 + 1] * 1.5;
+        const midZ = initZ + initialData.velocities[i * 3 + 2] * 0.6;
+
+        pos[i * 3] = THREE.MathUtils.lerp(midX, destX, subT);
+        pos[i * 3 + 1] = THREE.MathUtils.lerp(midY, destY, subT);
+        pos[i * 3 + 2] = THREE.MathUtils.lerp(midZ, destZ, subT);
+      }
+    }
+
+    pointsRef.current.geometry.attributes.position.needsUpdate = true;
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          count={count}
+          array={initialData.initialPos}
+          itemSize={3}
+        />
+        <bufferAttribute
+          attach="attributes-color"
+          count={count}
+          array={initialData.colors}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.065}
+        vertexColors
+        transparent
+        opacity={0.88}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+      />
+    </points>
+  );
+}
+
+// 7. GLOBAL COSMIC PARTICLE FIELD (PERSISTENT BEHIND ENTIRE PAGE)
 function PersistentCosmicField({ count = 650, progress = 0 }) {
   const pointsRef = useRef();
 
@@ -569,6 +698,11 @@ export default function CinematicBackground3D({ scrollProgress = 0, pointer = { 
         {/* Electric Cyan rim light */}
         <directionalLight position={[-6, -4, -5]} intensity={1.8} color="#00E5FF" />
         <pointLight position={[0, -2, 2]} intensity={1.5} color="#00FFA3" distance={10} />
+
+        {/* Document-to-Particle Dissolve & Reconstruction Stream (Experience 2) */}
+        <DocumentParticleDissolveStream
+          scrollProgress={isReducedMotion ? 0 : scrollProgress}
+        />
 
         {/* Global Persistent Cosmic Particles visible across complete scroll */}
         <PersistentCosmicField

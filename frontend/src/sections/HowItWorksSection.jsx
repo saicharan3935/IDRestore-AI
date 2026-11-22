@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import RestorationLaboratory from '../components/cinematic/RestorationLaboratory';
+import ZeroGravityLaboratory3D from '../components/cinematic/ZeroGravityLaboratory3D';
 import useSectionScrollProgress from '../hooks/useSectionScrollProgress';
 
 export default function HowItWorksSection({ onLaunchWorkspace }) {
@@ -30,8 +30,8 @@ export default function HowItWorksSection({ onLaunchWorkspace }) {
           </p>
         </div>
 
-        {/* Cinematic 3D Restoration Laboratory */}
-        <RestorationLaboratory
+        {/* Zero-Gravity 3D Restoration Laboratory */}
+        <ZeroGravityLaboratory3D
           onLaunchWorkspace={onLaunchWorkspace}
           scrollProgress={scrollProgress}
         />

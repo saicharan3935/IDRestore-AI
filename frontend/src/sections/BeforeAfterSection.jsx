@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import RestorationChamber from '../components/cinematic/RestorationChamber';
+import RestorationChamber3D from '../components/cinematic/RestorationChamber3D';
 import useSectionScrollProgress from '../hooks/useSectionScrollProgress';
 import { CheckCircle } from 'lucide-react';
 
@@ -10,8 +10,8 @@ export default function BeforeAfterSection({
 }) {
   const sectionRef = useRef(null);
   const scrollProgress = useSectionScrollProgress(sectionRef, {
-    offsetTop: 100,
-    offsetBottom: 100,
+    offsetTop: 120,
+    offsetBottom: 120,
     lerpFactor: 0.12,
   });
 
@@ -19,7 +19,7 @@ export default function BeforeAfterSection({
     <section
       id="showcase"
       ref={sectionRef}
-      className="py-24 bg-transparent relative overflow-hidden"
+      className="py-24 bg-transparent relative overflow-hidden border-t border-[#22323D]/40"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
         {/* Retained Required Section Headers */}
@@ -33,12 +33,12 @@ export default function BeforeAfterSection({
         </h2>
 
         <p className="text-base text-[#94A3B8] max-w-2xl mx-auto leading-relaxed bg-[#050709]/40 backdrop-blur-xs rounded-lg p-1">
-          Drag the cyan comparison beam below to observe how our OpenCV algorithms neutralize sepia aging, reverse ink fading, eliminate fluid stains, and sharpen microtext fonts on synthetic historical personnel records.
+          Observe our 3D Restoration Chamber in action: as you scroll, watch the historical document float into the zero-gravity scanner, separate into 3D split-reality panels, and explore micro-details with the synchronized loupe inspector.
         </p>
 
-        {/* Futuristic 3D Holographic Restoration Chamber */}
-        <div className="mt-10">
-          <RestorationChamber
+        {/* Real 3D Restoration Chamber with 4-Phase Transformation */}
+        <div className="mt-8">
+          <RestorationChamber3D
             demoData={demoData}
             demoLoading={demoLoading}
             loadLiveDemo={loadLiveDemo}

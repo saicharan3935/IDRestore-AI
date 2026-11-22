@@ -326,14 +326,7 @@ export default function LandingPage({ onLaunchWorkspace, onNavigateAuth }) {
           </div>
         </section>
 
-        {/* 3. HOLOGRAPHIC RESTORATION CHAMBER (BEFORE & AFTER) */}
-        <BeforeAfterSection
-          demoData={demoData}
-          demoLoading={demoLoading}
-          loadLiveDemo={loadLiveDemo}
-        />
-
-        {/* 4. 3D ORBITAL FEATURES CAROUSEL SECTION */}
+        {/* 3. 3D ORBITAL FEATURES CAROUSEL SECTION */}
         <section id="features" className="py-24 bg-transparent border-t border-[#22323D]/40 relative overflow-hidden">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center space-y-4 mb-8">
@@ -353,8 +346,15 @@ export default function LandingPage({ onLaunchWorkspace, onNavigateAuth }) {
           </div>
         </section>
 
-        {/* 5. 3D RESTORATION LABORATORY (HOW IT WORKS) */}
+        {/* 4. ZERO-GRAVITY 3D RESTORATION LABORATORY (HOW IT WORKS) */}
         <HowItWorksSection onLaunchWorkspace={onLaunchWorkspace} />
+
+        {/* 5. SPLIT-REALITY RESTORATION PORTAL (BEFORE & AFTER) */}
+        <BeforeAfterSection
+          demoData={demoData}
+          demoLoading={demoLoading}
+          loadLiveDemo={loadLiveDemo}
+        />
 
         {/* 6. 3D INTERACTIVE AI REACTOR (TECHNOLOGY & MODEL REGISTRY) */}
         <TechnologySection modelStatus={modelStatus} />
