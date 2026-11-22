@@ -1,5 +1,5 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
   Sliders,
@@ -18,58 +18,337 @@ import {
   CheckCircle,
   Eye,
   RefreshCw,
-  Compass
+  Compass,
+  Layers
 } from 'lucide-react';
 
-// Subtle 3D Ambient Cybernetic Platform & Gimbal in Background (Non-blocking)
-function ChamberBackgroundStage({ scrollProgress = 0 }) {
-  const ring1 = useRef();
-  const ring2 = useRef();
+// ==============================================================
+// 3D CARDS SCENE: MERGE, SEPARATE, OVERLAP & INSPECT IN REAL 3D
+// ==============================================================
+function Physical3DDocumentCards({
+  mode = 'split',
+  splitPos = 50,
+  laserPos = 50,
+  zoomLevel = 1.0,
+  textures,
+  pointer = { x: 0, y: 0 },
+  inspectorCoords = { x: 0.5, y: 0.5 },
+  isMobile = false,
+}) {
+  const leftCardRef = useRef();
+  const rightCardRef = useRef();
+  const laserBeamRef = useRef();
+  const splitBeamRef = useRef();
+
+  const docW = isMobile ? 3.2 : 4.0;
+  const docH = isMobile ? 2.2 : 2.7;
+
+  // Local clipping planes for Interactive Split and Laser Reveal
+  const splitClipPlane = useMemo(() => {
+    // Normal vector pointing in +X: keeps pixels where x < constant (reveals right)
+    return new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
+  }, []);
+
+  const laserClipPlane = useMemo(() => {
+    return new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
+  }, []);
 
   useFrame((state, delta) => {
-    if (ring1.current) ring1.current.rotation.z += delta * 0.2;
-    if (ring2.current) ring2.current.rotation.y += delta * 0.15;
+    const time = state.clock.getElapsedTime();
+    // Gentle floating zero-gravity motion
+    const floatY = Math.sin(time * 1.3) * 0.035;
+    const floatRotX = Math.sin(time * 0.9) * 0.015;
+    const floatRotY = Math.cos(time * 1.1) * 0.02;
+
+    const px = pointer.x * 0.15;
+    const py = pointer.y * 0.12;
+
+    // TARGET TRANSFORMS BASED ON SELECTED MODE:
+    // -------------------------------------------------------------
+    // MODE 1: 'split' -> Both cards merge into center (X = 0, Z = 0)
+    // MODE 2: 'side-by-side' -> Left card flies to -2.3, Right to +2.3, rotate outward
+    // MODE 3: 'laser-reveal' -> Left card slightly behind (Z = -0.05), Right card in front (Z = +0.08)
+    // MODE 4: 'inspector' -> Cards separate to -2.3 and +2.3 with flat inspection angle
+    // -------------------------------------------------------------
+    let targetLeftX = 0;
+    let targetLeftY = floatY + py;
+    let targetLeftZ = 0;
+    let targetLeftRotY = floatRotY;
+
+    let targetRightX = 0;
+    let targetRightY = floatY + py;
+    let targetRightZ = 0.02; // slightly in front when merged
+    let targetRightRotY = floatRotY;
+
+    const sepX = isMobile ? 1.8 : 2.35;
+
+    if (mode === 'split') {
+      // Merged into single central document
+      targetLeftX = px;
+      targetLeftZ = 0;
+      targetRightX = px;
+      targetRightZ = 0.02;
+      targetLeftRotY = floatRotY;
+      targetRightRotY = floatRotY;
+    } else if (mode === 'side-by-side') {
+      // Physically separate and rotate outward in 3D
+      targetLeftX = -sepX + px;
+      targetLeftZ = -0.15;
+      targetLeftRotY = isMobile ? 0 : 0.18 + floatRotY;
+
+      targetRightX = sepX + px;
+      targetRightZ = -0.15;
+      targetRightRotY = isMobile ? 0 : -0.18 + floatRotY;
+    } else if (mode === 'laser-reveal') {
+      // Overlapping 3D arrangement: Original behind, Restored in front
+      targetLeftX = px;
+      targetLeftZ = -0.12;
+      targetRightX = px;
+      targetRightZ = 0.12;
+      targetLeftRotY = floatRotY;
+      targetRightRotY = floatRotY;
+    } else if (mode === 'inspector') {
+      // Separated for synchronized dual magnification inspection
+      targetLeftX = -sepX + px;
+      targetLeftZ = 0;
+      targetLeftRotY = isMobile ? 0 : 0.08 + floatRotY;
+
+      targetRightX = sepX + px;
+      targetRightZ = 0;
+      targetRightRotY = isMobile ? 0 : -0.08 + floatRotY;
+    }
+
+    const lerpSpeed = delta * 4.5;
+    const finalScale = zoomLevel * (isMobile ? 0.85 : 1.0);
+
+    // Smoothly animate Left Card (Original)
+    if (leftCardRef.current) {
+      leftCardRef.current.position.x = THREE.MathUtils.damp(leftCardRef.current.position.x, targetLeftX, 6, delta);
+      leftCardRef.current.position.y = THREE.MathUtils.damp(leftCardRef.current.position.y, targetLeftY, 6, delta);
+      leftCardRef.current.position.z = THREE.MathUtils.damp(leftCardRef.current.position.z, targetLeftZ, 6, delta);
+      leftCardRef.current.rotation.x = THREE.MathUtils.damp(leftCardRef.current.rotation.x, floatRotX, 6, delta);
+      leftCardRef.current.rotation.y = THREE.MathUtils.damp(leftCardRef.current.rotation.y, targetLeftRotY, 6, delta);
+      leftCardRef.current.scale.setScalar(THREE.MathUtils.damp(leftCardRef.current.scale.x, finalScale, 6, delta));
+    }
+
+    // Smoothly animate Right Card (Restored)
+    if (rightCardRef.current) {
+      rightCardRef.current.position.x = THREE.MathUtils.damp(rightCardRef.current.position.x, targetRightX, 6, delta);
+      rightCardRef.current.position.y = THREE.MathUtils.damp(rightCardRef.current.position.y, targetRightY, 6, delta);
+      rightCardRef.current.position.z = THREE.MathUtils.damp(rightCardRef.current.position.z, targetRightZ, 6, delta);
+      rightCardRef.current.rotation.x = THREE.MathUtils.damp(rightCardRef.current.rotation.x, floatRotX, 6, delta);
+      rightCardRef.current.rotation.y = THREE.MathUtils.damp(rightCardRef.current.rotation.y, targetRightRotY, 6, delta);
+      rightCardRef.current.scale.setScalar(THREE.MathUtils.damp(rightCardRef.current.scale.x, finalScale, 6, delta));
+    }
+
+    // Dynamic 3D clipping planes:
+    // Update Interactive Split Divider position in 3D world space
+    const splitOffset = ((splitPos / 100) - 0.5) * docW;
+    splitClipPlane.constant = (mode === 'split' ? splitOffset : 100);
+
+    if (splitBeamRef.current) {
+      splitBeamRef.current.position.x = splitOffset;
+      splitBeamRef.current.visible = (mode === 'split');
+    }
+
+    // Update Laser Sweep position in 3D world space
+    const laserOffset = ((laserPos / 100) - 0.5) * docW;
+    laserClipPlane.constant = (mode === 'laser-reveal' ? laserOffset : 100);
+
+    if (laserBeamRef.current) {
+      laserBeamRef.current.position.x = laserOffset;
+      laserBeamRef.current.visible = (mode === 'laser-reveal');
+    }
   });
 
   return (
-    <group position={[0, 0, -2.5]} rotation={[0.15, 0, 0]}>
-      {/* Concentric Cyan Ring */}
-      <mesh ref={ring1}>
-        <torusGeometry args={[3.8, 0.012, 16, 64]} />
-        <meshBasicMaterial
-          color="#00E5FF"
-          transparent
-          opacity={0.35}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
+    <group>
+      {/* ============================================================== */}
+      {/* 3D DOCUMENT CARD 1: ORIGINAL DEGRADED (1987 ARCHIVE)           */}
+      {/* ============================================================== */}
+      <group ref={leftCardRef} position={[mode === 'side-by-side' ? -2.35 : 0, 0, 0]}>
+        {/* Physical Shallow Card Slab */}
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[docW, docH, 0.03]} />
+          <meshStandardMaterial
+            color="#0B1117"
+            roughness={0.4}
+            metalness={0.7}
+          />
+        </mesh>
 
-      {/* Laser Mint Secondary Ring */}
-      <mesh ref={ring2} rotation={[Math.PI / 3, 0, 0]}>
-        <torusGeometry args={[4.2, 0.01, 16, 64]} />
-        <meshBasicMaterial
-          color="#00FFA3"
-          transparent
-          opacity={0.25}
-          blending={THREE.AdditiveBlending}
-        />
+        {/* Front Textured Surface */}
+        <mesh position={[0, 0, 0.018]}>
+          <planeGeometry args={[docW * 0.98, docH * 0.98]} />
+          {textures.original ? (
+            <meshStandardMaterial
+              map={textures.original}
+              roughness={0.35}
+              metalness={0.15}
+            />
+          ) : (
+            <meshStandardMaterial color="#17232C" />
+          )}
+        </mesh>
+
+        {/* Amber / Platinum Precision Edge Rim */}
+        <lineSegments position={[0, 0, 0.02]}>
+          <edgesGeometry args={[new THREE.PlaneGeometry(docW, docH)]} />
+          <lineBasicMaterial
+            color="#FFB547"
+            transparent
+            opacity={mode === 'side-by-side' ? 0.95 : 0.6}
+            blending={THREE.AdditiveBlending}
+          />
+        </lineSegments>
+
+        {/* Holographic Corner Alignment Markers */}
+        {[-docW / 2, docW / 2].map((cx, i) =>
+          [-docH / 2, docH / 2].map((cy, j) => (
+            <mesh key={`l-${i}-${j}`} position={[cx, cy, 0.022]}>
+              <ringGeometry args={[0.035, 0.075, 12]} />
+              <meshBasicMaterial color="#FFB547" transparent opacity={0.8} />
+            </mesh>
+          ))
+        )}
+      </group>
+
+      {/* ============================================================== */}
+      {/* 3D DOCUMENT CARD 2: RESTORED DIGITAL ASSET (IDRESTORE AI)       */}
+      {/* ============================================================== */}
+      <group ref={rightCardRef} position={[mode === 'side-by-side' ? 2.35 : 0, 0, 0.02]}>
+        {/* Physical Shallow Card Slab */}
+        <mesh castShadow receiveShadow>
+          <boxGeometry args={[docW, docH, 0.03]} />
+          <meshStandardMaterial
+            color="#0B1117"
+            roughness={0.25}
+            metalness={0.85}
+          />
+        </mesh>
+
+        {/* Front Textured Surface with Clipping Plane for Split & Laser */}
+        <mesh position={[0, 0, 0.018]}>
+          <planeGeometry args={[docW * 0.98, docH * 0.98]} />
+          {textures.restored ? (
+            <meshStandardMaterial
+              map={textures.restored}
+              roughness={0.15}
+              metalness={0.25}
+              clippingPlanes={
+                mode === 'split'
+                  ? [splitClipPlane]
+                  : mode === 'laser-reveal'
+                  ? [laserClipPlane]
+                  : []
+              }
+              clipShadows
+            />
+          ) : (
+            <meshStandardMaterial color="#101820" />
+          )}
+        </mesh>
+
+        {/* Electric Cyan / Laser Mint Glow Rim */}
+        <lineSegments position={[0, 0, 0.02]}>
+          <edgesGeometry args={[new THREE.PlaneGeometry(docW, docH)]} />
+          <lineBasicMaterial
+            color="#00FFA3"
+            transparent
+            opacity={0.9}
+            blending={THREE.AdditiveBlending}
+          />
+        </lineSegments>
+
+        {/* Holographic Corner Alignment Markers */}
+        {[-docW / 2, docW / 2].map((cx, i) =>
+          [-docH / 2, docH / 2].map((cy, j) => (
+            <mesh key={`r-${i}-${j}`} position={[cx, cy, 0.022]}>
+              <ringGeometry args={[0.035, 0.075, 12]} />
+              <meshBasicMaterial color="#00E5FF" transparent opacity={0.9} />
+            </mesh>
+          ))
+        )}
+
+        {/* 3D Cyan Laser Sweep Line (Laser Reveal Mode) */}
+        <group ref={laserBeamRef} visible={mode === 'laser-reveal'} position={[0, 0, 0.035]}>
+          <mesh>
+            <planeGeometry args={[0.07, docH * 1.04]} />
+            <meshBasicMaterial
+              color="#00E5FF"
+              transparent
+              opacity={0.95}
+              blending={THREE.AdditiveBlending}
+            />
+          </mesh>
+          <mesh>
+            <planeGeometry args={[0.3, docH * 1.04]} />
+            <meshBasicMaterial
+              color="#00FFA3"
+              transparent
+              opacity={0.35}
+              blending={THREE.AdditiveBlending}
+            />
+          </mesh>
+        </group>
+
+        {/* 3D Cyan Split Divider Beam (Interactive Split Mode) */}
+        <group ref={splitBeamRef} visible={mode === 'split'} position={[0, 0, 0.035]}>
+          <mesh>
+            <planeGeometry args={[0.05, docH * 1.02]} />
+            <meshBasicMaterial
+              color="#00E5FF"
+              transparent
+              opacity={0.95}
+              blending={THREE.AdditiveBlending}
+            />
+          </mesh>
+          <mesh position={[0, 0, 0.01]}>
+            <circleGeometry args={[0.18, 24]} />
+            <meshBasicMaterial color="#00E5FF" transparent opacity={0.8} />
+          </mesh>
+        </group>
+      </group>
+    </group>
+  );
+}
+
+// Background Holographic Gimbal Rings
+function ChamberGimbalRings() {
+  const g1 = useRef();
+  const g2 = useRef();
+
+  useFrame((state, delta) => {
+    if (g1.current) g1.current.rotation.z += delta * 0.25;
+    if (g2.current) g2.current.rotation.y += delta * 0.18;
+  });
+
+  return (
+    <group position={[0, 0, -2.8]} rotation={[0.12, 0, 0]}>
+      <mesh ref={g1}>
+        <torusGeometry args={[4.2, 0.014, 16, 64]} />
+        <meshBasicMaterial color="#00E5FF" transparent opacity={0.3} blending={THREE.AdditiveBlending} />
+      </mesh>
+      <mesh ref={g2} rotation={[Math.PI / 3, 0, 0]}>
+        <torusGeometry args={[4.8, 0.012, 16, 64]} />
+        <meshBasicMaterial color="#00FFA3" transparent opacity={0.2} blending={THREE.AdditiveBlending} />
       </mesh>
     </group>
   );
 }
 
-// Atmospheric Chamber Floating Cyber Particles
-function AmbientChamberParticles({ count = 60 }) {
+// Atmospheric Cyber Particles
+function ChamberAtmosphericDust({ count = 50 }) {
   const pointsRef = useRef();
 
-  const [coords, colors] = React.useMemo(() => {
+  const [coords, colors] = useMemo(() => {
     const pos = new Float32Array(count * 3);
     const cols = new Float32Array(count * 3);
     const c1 = new THREE.Color('#00E5FF');
     const c2 = new THREE.Color('#00FFA3');
 
     for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 12;
+      pos[i * 3] = (Math.random() - 0.5) * 14;
       pos[i * 3 + 1] = (Math.random() - 0.5) * 8;
       pos[i * 3 + 2] = (Math.random() - 0.5) * 4;
 
@@ -86,10 +365,10 @@ function AmbientChamberParticles({ count = 60 }) {
     if (!pointsRef.current) return;
     const array = pointsRef.current.geometry.attributes.position.array;
     for (let i = 0; i < count; i++) {
-      array[i * 3 + 1] += Math.sin(state.clock.elapsedTime * 1.2 + i) * 0.0018;
+      array[i * 3 + 1] += Math.sin(state.clock.elapsedTime * 1.5 + i) * 0.0018;
     }
     pointsRef.current.geometry.attributes.position.needsUpdate = true;
-    pointsRef.current.rotation.y += delta * 0.03;
+    pointsRef.current.rotation.y += delta * 0.02;
   });
 
   return (
@@ -99,7 +378,7 @@ function AmbientChamberParticles({ count = 60 }) {
         <bufferAttribute attach="attributes-color" count={count} array={colors} itemSize={3} />
       </bufferGeometry>
       <pointsMaterial
-        size={0.055}
+        size={0.05}
         vertexColors
         transparent
         opacity={0.65}
@@ -110,40 +389,67 @@ function AmbientChamberParticles({ count = 60 }) {
   );
 }
 
+// ==============================================================
+// MASTER EXPORT COMPONENT: RESTORATION CHAMBER 3D
+// ==============================================================
 export default function RestorationChamber3D({
   demoData,
   demoLoading,
   loadLiveDemo,
   scrollProgress = 0,
 }) {
-  // ==============================================================
-  // STEP 2: INDEPENDENT COMPARISON STATE (SEPARATED FROM SCROLL)
-  // ==============================================================
+  // Independent comparison state
   const [mode, setMode] = useState('split'); // 'split' | 'side-by-side' | 'laser-reveal' | 'inspector'
-  const [splitPos, setSplitPos] = useState(50); // 0% to 100%
+  const [splitPos, setSplitPos] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Laser Reveal state (independent play/pause & position)
+  // Laser Reveal state
   const [laserPos, setLaserPos] = useState(50);
   const [laserPlaying, setLaserPlaying] = useState(true);
 
-  // Detail Inspector coordinates: normalized [0, 1]
+  // Detail Inspector coordinates
   const [inspectorCoords, setInspectorCoords] = useState({ x: 0.5, y: 0.5 });
+  const [pointer, setPointer] = useState({ x: 0, y: 0 });
 
   const containerRef = useRef(null);
-  const splitViewportRef = useRef(null);
+  const canvasWrapperRef = useRef(null);
+  const [textures, setTextures] = useState({ original: null, restored: null });
 
-  const originalUrl = demoData?.original_url || '/samples/demo_original_degraded.jpg';
-  const restoredUrl = demoData?.restored_url || '/samples/demo_restored_clean.jpg';
+  // Load Three.js Textures
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    const origUrl = demoData?.original_url || '/samples/demo_original_degraded.jpg';
+    const restUrl = demoData?.restored_url || '/samples/demo_restored_clean.jpg';
 
-  // ==============================================================
-  // STEP 4: INTERACTIVE SPLIT DRAGGING (DIRECT INPUT ONLY)
-  // ==============================================================
+    loader.load(origUrl, (origTex) => {
+      origTex.colorSpace = THREE.SRGBColorSpace;
+      origTex.minFilter = THREE.LinearFilter;
+      origTex.generateMipmaps = false;
+
+      loader.load(restUrl, (restTex) => {
+        restTex.colorSpace = THREE.SRGBColorSpace;
+        restTex.minFilter = THREE.LinearFilter;
+        restTex.generateMipmaps = false;
+        setTextures({ original: origTex, restored: restTex });
+      });
+    });
+  }, [demoData]);
+
+  // Pointer move for 3D parallax
+  const handleMouseMove = (e) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const y = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+    setPointer({ x, y });
+  };
+
+  // Dragging split divider
   const handleSplitDrag = useCallback((clientX) => {
-    if (!splitViewportRef.current) return;
-    const rect = splitViewportRef.current.getBoundingClientRect();
+    if (!canvasWrapperRef.current) return;
+    const rect = canvasWrapperRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
     const percent = Math.max(0, Math.min((x / rect.width) * 100, 100));
     setSplitPos(percent);
@@ -167,31 +473,15 @@ export default function RestorationChamber3D({
     };
   }, [isDragging, handleSplitDrag]);
 
-  // Keyboard controls for split divider
-  const handleKeyDown = (e) => {
-    if (mode === 'split') {
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setSplitPos((p) => Math.max(0, p - 4));
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        setSplitPos((p) => Math.min(100, p + 4));
-      }
-    }
-  };
-
-  // ==============================================================
-  // STEP 6: LASER REVEAL AUTOMATION (INDEPENDENT PLAY/PAUSE)
-  // ==============================================================
+  // Laser Reveal Auto-Sweep
   useEffect(() => {
     if (mode !== 'laser-reveal' || !laserPlaying) return;
     let animId;
     let start = performance.now();
-    const initialPos = laserPos;
 
     const sweepLoop = (now) => {
       const elapsed = (now - start) / 1000;
-      // Oscillate smoothly across 0% to 100% every 3.5 seconds
+      // Oscillate across 0% to 100% every 3.5s
       const current = (Math.sin(elapsed * 1.8 - Math.PI / 2) * 0.5 + 0.5) * 100;
       setLaserPos(current);
       animId = requestAnimationFrame(sweepLoop);
@@ -201,9 +491,7 @@ export default function RestorationChamber3D({
     return () => cancelAnimationFrame(animId);
   }, [mode, laserPlaying]);
 
-  // ==============================================================
-  // STEP 7: DETAIL INSPECTOR MOUSE & TOUCH TRACKING
-  // ==============================================================
+  // Detail Inspector tracking
   const handleInspectorMove = (e) => {
     if (mode !== 'inspector') return;
     const target = e.currentTarget;
@@ -215,9 +503,8 @@ export default function RestorationChamber3D({
     setInspectorCoords({ x: normX, y: normY });
   };
 
-  // Zoom and Tools
   const handleZoom = (delta) => {
-    setZoomLevel((z) => Math.min(2.5, Math.max(0.75, z + delta)));
+    setZoomLevel((z) => Math.min(2.0, Math.max(0.75, z + delta)));
   };
 
   const handleReset = () => {
@@ -230,7 +517,7 @@ export default function RestorationChamber3D({
 
   const handleDownload = () => {
     const link = document.createElement('a');
-    link.href = restoredUrl;
+    link.href = demoData?.restored_url || '/samples/demo_restored_clean.jpg';
     link.download = 'Restored_Employee_Record_1987.jpg';
     document.body.appendChild(link);
     link.click();
@@ -254,63 +541,46 @@ export default function RestorationChamber3D({
       tabIndex={0}
       role="region"
       aria-label="3D Restoration Chamber Comparison Portal"
-      onKeyDown={handleKeyDown}
+      onMouseMove={handleMouseMove}
       className="relative w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 select-none focus:outline-none"
     >
-      {/* Main 3D Restoration Chamber Container */}
       <div className="relative w-full rounded-3xl bg-[#0B1117]/90 backdrop-blur-2xl border border-[#22323D] overflow-hidden p-4 sm:p-7 shadow-[0_20px_70px_rgba(0,0,0,0.85)]">
         
-        {/* Holographic Scanlines & Corner Laser Guides */}
+        {/* Holographic Scanline Overlay & Corner Laser Guides */}
         <div className="absolute inset-0 scanline-grid opacity-15 pointer-events-none" />
         <div className="absolute -top-1 -left-1 w-6 h-6 border-t-2 border-l-2 border-[#00E5FF] z-40 pointer-events-none" />
         <div className="absolute -top-1 -right-1 w-6 h-6 border-t-2 border-r-2 border-[#00E5FF] z-40 pointer-events-none" />
         <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-2 border-l-2 border-[#00FFA3] z-40 pointer-events-none" />
         <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-2 border-r-2 border-[#00FFA3] z-40 pointer-events-none" />
 
-        {/* Ambient 3D Three.js Backdrop (Non-blocking, pointer-events-none) */}
-        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
-          <Canvas
-            camera={{ position: [0, 0, 5.0], fov: 45 }}
-            gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-            dpr={[1, 1.5]}
-            style={{ background: 'transparent' }}
-          >
-            <ambientLight intensity={0.6} />
-            <pointLight position={[0, 3, 3]} intensity={1.8} color="#00E5FF" />
-            <pointLight position={[0, -3, 2]} intensity={1.2} color="#00FFA3" />
-            <ChamberBackgroundStage scrollProgress={scrollProgress} />
-            <AmbientChamberParticles count={65} />
-          </Canvas>
-        </div>
-
         {/* ============================================================== */}
-        {/* TOP HUD: STATUS BAR, MODE SELECTOR & TOOLS                     */}
+        {/* TOP HUD: STATUS BAR, 4 MODE BUTTONS & TOOLS                    */}
         {/* ============================================================== */}
         <div className="relative z-30 flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-[#22323D]/80 text-xs font-mono">
           <div className="flex items-center space-x-2.5">
             <span className="w-2.5 h-2.5 rounded-full bg-[#00FFA3] animate-pulse" />
             <span className="text-[#00E5FF] font-bold tracking-wider">
-              3D RESTORATION PORTAL
+              3D RESTORATION PORTAL &bull; CLICK TO ANIMATE
             </span>
-            <span className="hidden sm:inline text-[#94A3B8]">| BIOMETRIC PRESERVATION VERIFIED</span>
+            <span className="hidden sm:inline text-[#94A3B8]">| ZERO-GRAVITY CARD RECONFIGURATION</span>
           </div>
 
           <div className="flex items-center space-x-3 text-[11px] text-[#94A3B8]">
             <span className="px-2.5 py-0.5 rounded bg-[#101820] border border-[#22323D] text-[#00FFA3]">
-              ACTIVE MODE: {mode.toUpperCase()}
+              MODE: {mode.toUpperCase().replace('-', ' ')}
             </span>
             <span className="hidden sm:inline text-[#DCE7EC]">900 &times; 600 PX</span>
           </div>
         </div>
 
-        {/* Mode Switcher Tabs & Inspection Controls Toolbar */}
+        {/* 4 Mode Buttons & Tools Toolbar */}
         <div className="relative z-30 flex flex-wrap items-center justify-between gap-3 mb-4">
-          {/* The 4 Independent Comparison Mode Buttons */}
+          {/* THE 4 CLICK-TO-TRANSFORM MODE BUTTONS */}
           <div className="flex items-center space-x-1.5 p-1 rounded-xl bg-[#101820] border border-[#22323D] text-xs font-mono">
             {[
-              { id: 'split', label: 'Interactive Split', icon: Sliders },
-              { id: 'side-by-side', label: 'Side-by-Side', icon: Columns },
-              { id: 'laser-reveal', label: 'Laser Reveal', icon: Scan },
+              { id: 'split', label: 'Interactive Split (Merge)', icon: Sliders },
+              { id: 'side-by-side', label: 'Side-by-Side (Separate)', icon: Columns },
+              { id: 'laser-reveal', label: 'Laser Reveal (Overlap)', icon: Scan },
               { id: 'inspector', label: 'Detail Inspector', icon: Crosshair },
             ].map((m) => {
               const Icon = m.icon;
@@ -333,26 +603,26 @@ export default function RestorationChamber3D({
             })}
           </div>
 
-          {/* Action Tools: Zoom, Reset, Fullscreen, Download */}
+          {/* Action Tools */}
           <div className="flex items-center space-x-2">
             <button
-              onClick={() => handleZoom(0.25)}
+              onClick={() => handleZoom(0.2)}
               title="Zoom In"
-              className="p-2 rounded-lg bg-[#101820] text-[#DCE7EC] hover:text-[#00E5FF] border border-[#22323D] hover:border-[#00E5FF]/40 transition-colors"
+              className="p-2 rounded-lg bg-[#101820] text-[#DCE7EC] hover:text-[#00E5FF] border border-[#22323D] transition-colors"
             >
               <ZoomIn className="w-4 h-4" />
             </button>
             <button
-              onClick={() => handleZoom(-0.25)}
+              onClick={() => handleZoom(-0.2)}
               title="Zoom Out"
-              className="p-2 rounded-lg bg-[#101820] text-[#DCE7EC] hover:text-[#00E5FF] border border-[#22323D] hover:border-[#00E5FF]/40 transition-colors"
+              className="p-2 rounded-lg bg-[#101820] text-[#DCE7EC] hover:text-[#00E5FF] border border-[#22323D] transition-colors"
             >
               <ZoomOut className="w-4 h-4" />
             </button>
             <button
               onClick={handleReset}
               title="Reset Controls"
-              className="p-2 rounded-lg bg-[#101820] text-[#DCE7EC] hover:text-[#00FFA3] border border-[#22323D] hover:border-[#00FFA3]/40 transition-colors"
+              className="p-2 rounded-lg bg-[#101820] text-[#DCE7EC] hover:text-[#00FFA3] border border-[#22323D] transition-colors"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -374,53 +644,62 @@ export default function RestorationChamber3D({
         </div>
 
         {/* ============================================================== */}
-        {/* MAIN VISIBLE COMPARISON STAGE (LARGE, PROMINENT & FUNCTIONAL)   */}
+        {/* REAL 3D CANVAS VIEWPORT: CARDS SEPARATE, MERGE & ROTATE        */}
         {/* ============================================================== */}
-        <div className="relative z-20 w-full min-h-[460px] sm:min-h-[520px] md:min-h-[560px] rounded-2xl overflow-hidden border border-[#22323D] bg-[#050709] flex items-center justify-center p-3 sm:p-5">
-          
-          {/* MODE 1: INTERACTIVE SPLIT (DRAGGABLE CYAN DIVIDER) */}
+        <div
+          ref={canvasWrapperRef}
+          className="relative w-full h-[460px] sm:h-[520px] md:h-[580px] rounded-2xl overflow-hidden border border-[#22323D] bg-[#050709] flex items-center justify-center"
+        >
+          {/* Real Three.js Canvas with Local Clipping Enabled */}
+          <Canvas
+            camera={{ position: [0, 0, 5.8], fov: 46 }}
+            gl={{
+              antialias: true,
+              alpha: true,
+              powerPreference: 'high-performance',
+              localClippingEnabled: true, // Enables true 3D clipping for Split & Laser!
+            }}
+            dpr={[1, 1.5]}
+            style={{ background: 'transparent' }}
+          >
+            <ambientLight intensity={0.7} />
+            <directionalLight position={[5, 6, 6]} intensity={2.2} color="#DCE7EC" />
+            <directionalLight position={[-5, -4, -4]} intensity={1.5} color="#00E5FF" />
+            <pointLight position={[0, 0, 3.2]} intensity={1.6} color="#00FFA3" distance={8} />
+
+            {/* Background Gimbal Rings & Ambient Dust */}
+            <ChamberGimbalRings />
+            <ChamberAtmosphericDust count={45} />
+
+            {/* The Physical 3D Document Cards that Merge and Separate on Click! */}
+            <Physical3DDocumentCards
+              mode={mode}
+              splitPos={splitPos}
+              laserPos={laserPos}
+              zoomLevel={zoomLevel}
+              textures={textures}
+              pointer={pointer}
+              inspectorCoords={inspectorCoords}
+            />
+          </Canvas>
+
+          {/* ============================================================== */}
+          {/* HTML ACCESSIBLE INTERACTION OVERLAYS                           */}
+          {/* ============================================================== */}
+
+          {/* 1. Interactive Split Draggable Beam Overlay (When mode === 'split') */}
           {mode === 'split' && (
             <div
-              ref={splitViewportRef}
-              className="relative w-full max-w-4xl h-[420px] sm:h-[480px] md:h-[500px] rounded-xl overflow-hidden border border-[#22323D] bg-[#0B1117] flex items-center justify-center cursor-ew-resize select-none"
+              className="absolute inset-0 z-30 cursor-ew-resize select-none"
               style={{ touchAction: 'none' }}
               onPointerDown={(e) => {
-                e.stopPropagation();
                 setIsDragging(true);
                 handleSplitDrag(e.clientX);
               }}
             >
-              {/* Layer 1 (Underneath): Restored Digital Asset */}
+              {/* Floating Divider Handle in Center Viewport */}
               <div
-                className="absolute inset-0 flex items-center justify-center overflow-hidden"
-                style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
-              >
-                <img
-                  src={restoredUrl}
-                  alt="Restored Digital Asset"
-                  className="w-full h-full object-contain pointer-events-none"
-                />
-              </div>
-
-              {/* Layer 2 (Clipped Overlay): Original Degraded Document */}
-              <div
-                className="absolute inset-0 flex items-center justify-center overflow-hidden"
-                style={{
-                  clipPath: `polygon(0 0, ${splitPos}% 0, ${splitPos}% 100%, 0 100%)`,
-                  transform: `scale(${zoomLevel})`,
-                  transformOrigin: 'center center',
-                }}
-              >
-                <img
-                  src={originalUrl}
-                  alt="Original Degraded Scan"
-                  className="w-full h-full object-contain pointer-events-none"
-                />
-              </div>
-
-              {/* Draggable Vertical Cyan Divider & Handle */}
-              <div
-                className="absolute top-0 bottom-0 z-30 flex items-center justify-center pointer-events-none"
+                className="absolute top-0 bottom-0 z-40 flex items-center justify-center pointer-events-none"
                 style={{ left: `${splitPos}%`, transform: 'translateX(-50%)' }}
               >
                 <div className="w-1 h-full bg-[#00E5FF] shadow-[0_0_18px_#00E5FF]" />
@@ -429,92 +708,32 @@ export default function RestorationChamber3D({
                 </div>
               </div>
 
-              {/* Floating Corner Badges */}
-              <div className="absolute top-3 left-3 z-20 px-3 py-1 rounded bg-[#050709]/85 border border-[#FFB547]/40 text-[10px] font-mono text-[#FFB547]">
+              {/* Labels */}
+              <div className="absolute top-4 left-6 px-3 py-1 rounded bg-[#050709]/85 border border-[#FFB547]/40 text-[10px] font-mono text-[#FFB547]">
                 ORIGINAL (1987)
               </div>
-              <div className="absolute top-3 right-3 z-20 px-3 py-1 rounded bg-[#050709]/85 border border-[#00FFA3]/50 text-[10px] font-mono text-[#00FFA3] font-bold">
+              <div className="absolute top-4 right-6 px-3 py-1 rounded bg-[#050709]/85 border border-[#00FFA3]/50 text-[10px] font-mono text-[#00FFA3] font-bold">
                 RESTORED (IDRESTORE AI)
               </div>
             </div>
           )}
 
-          {/* MODE 2: SIDE-BY-SIDE (INSTANT DUAL DOCUMENT INSPECTION) */}
+          {/* 2. Side-by-Side Floating Labels Overlay (When mode === 'side-by-side') */}
           {mode === 'side-by-side' && (
-            <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-5 p-2">
-              {/* Left Column: Original Degraded */}
-              <div className="relative rounded-xl overflow-hidden border border-[#22323D] bg-[#0B1117] h-[380px] sm:h-[440px] flex items-center justify-center">
-                <div
-                  className="w-full h-full flex items-center justify-center overflow-hidden"
-                  style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
-                >
-                  <img
-                    src={originalUrl}
-                    alt="Original Degraded Document"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                <div className="absolute top-3 left-3 px-3 py-1 rounded bg-[#050709]/85 border border-[#FFB547]/40 text-[10px] font-mono text-[#FFB547]">
-                  ORIGINAL DEGRADED (1987)
-                </div>
+            <div className="absolute inset-x-0 top-4 z-30 flex justify-between px-8 sm:px-16 pointer-events-none text-xs font-mono">
+              <div className="px-3.5 py-1.5 rounded-lg bg-[#050709]/85 border border-[#FFB547]/50 text-[#FFB547] shadow-[0_0_15px_rgba(255,181,71,0.2)]">
+                ORIGINAL DEGRADED (1987 ARCHIVE)
               </div>
-
-              {/* Right Column: Restored Digital Asset */}
-              <div className="relative rounded-xl overflow-hidden border border-[#00FFA3]/50 bg-[#0B1117] h-[380px] sm:h-[440px] flex items-center justify-center shadow-[0_0_25px_rgba(0,255,163,0.15)]">
-                <div
-                  className="w-full h-full flex items-center justify-center overflow-hidden"
-                  style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
-                >
-                  <img
-                    src={restoredUrl}
-                    alt="Restored Clean Asset"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                <div className="absolute top-3 right-3 px-3 py-1 rounded bg-[#050709]/85 border border-[#00FFA3]/50 text-[10px] font-mono text-[#00FFA3] font-bold">
-                  ENHANCED DIGITAL ASSET
-                </div>
+              <div className="px-3.5 py-1.5 rounded-lg bg-[#050709]/85 border border-[#00FFA3]/60 text-[#00FFA3] font-bold shadow-[0_0_20px_rgba(0,255,163,0.25)]">
+                ENHANCED DIGITAL ASSET (IDRESTORE AI)
               </div>
             </div>
           )}
 
-          {/* MODE 3: LASER REVEAL (AUTOMATED / MANUAL SCANNING SWEEP) */}
+          {/* 3. Laser Reveal Controls Overlay (When mode === 'laser-reveal') */}
           {mode === 'laser-reveal' && (
-            <div className="w-full max-w-4xl space-y-4">
-              <div
-                className="relative w-full h-[400px] sm:h-[460px] rounded-xl overflow-hidden border border-[#22323D] bg-[#0B1117] flex items-center justify-center"
-                style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
-              >
-                {/* Original Base Image */}
-                <img
-                  src={originalUrl}
-                  alt="Original Base"
-                  className="w-full h-full object-contain pointer-events-none"
-                />
-
-                {/* Restored Clipped Image */}
-                <div
-                  className="absolute inset-0 flex items-center justify-center overflow-hidden"
-                  style={{ clipPath: `polygon(0 0, ${laserPos}% 0, ${laserPos}% 100%, 0 100%)` }}
-                >
-                  <img
-                    src={restoredUrl}
-                    alt="Restored Overlay"
-                    className="w-full h-full object-contain pointer-events-none"
-                  />
-                </div>
-
-                {/* Laser Sweep Beam */}
-                <div
-                  className="absolute top-0 bottom-0 w-1 bg-[#00E5FF] shadow-[0_0_20px_#00E5FF] pointer-events-none"
-                  style={{ left: `${laserPos}%` }}
-                >
-                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-[#00FFA3] animate-ping" />
-                </div>
-              </div>
-
-              {/* Laser Controls: Play/Pause, Scrub Slider, Reset */}
-              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[#101820] border border-[#22323D] text-xs font-mono">
+            <div className="absolute inset-x-0 bottom-4 z-30 px-6 pointer-events-auto">
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[#0B1117]/95 backdrop-blur-md border border-[#22323D] text-xs font-mono max-w-xl mx-auto shadow-[0_8px_30px_rgba(0,0,0,0.8)]">
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={() => setLaserPlaying((p) => !p)}
@@ -536,9 +755,8 @@ export default function RestorationChamber3D({
                   </button>
                 </div>
 
-                {/* Manual Scrub Bar */}
-                <div className="flex items-center space-x-3 w-full sm:w-64">
-                  <span className="text-[#94A3B8] text-[10px]">SWEEP: {laserPos.toFixed(0)}%</span>
+                <div className="flex items-center space-x-2 w-full sm:w-56">
+                  <span className="text-[#94A3B8] text-[10px]">REVEAL: {laserPos.toFixed(0)}%</span>
                   <input
                     type="range"
                     min="0"
@@ -555,62 +773,49 @@ export default function RestorationChamber3D({
             </div>
           )}
 
-          {/* MODE 4: DETAIL INSPECTOR (SYNCHRONIZED DUAL MAGNIFICATION) */}
+          {/* 4. Detail Inspector Loupes Overlay (When mode === 'inspector') */}
           {mode === 'inspector' && (
-            <div className="w-full max-w-5xl space-y-4">
-              {/* Dual Paired Magnification Loupes */}
-              <div
-                onMouseMove={handleInspectorMove}
-                onTouchMove={handleInspectorMove}
-                className="grid grid-cols-1 md:grid-cols-2 gap-4 cursor-crosshair"
-              >
-                {/* Left Loupe: Original Degraded */}
-                <div className="relative rounded-xl overflow-hidden border border-[#22323D] bg-[#0B1117] h-[340px] sm:h-[380px]">
+            <div
+              onMouseMove={handleInspectorMove}
+              onTouchMove={handleInspectorMove}
+              className="absolute inset-0 z-30 p-4 pointer-events-auto flex flex-col justify-between"
+            >
+              <div className="grid grid-cols-2 gap-4 h-44 sm:h-48 pointer-events-none">
+                {/* Left Loupe: Original */}
+                <div className="relative rounded-xl overflow-hidden border border-[#22323D] bg-[#050709]/95">
                   <div
                     className="w-full h-full"
                     style={{
-                      backgroundImage: `url(${originalUrl})`,
+                      backgroundImage: `url(${demoData?.original_url || '/samples/demo_original_degraded.jpg'})`,
                       backgroundPosition: `${inspectorCoords.x * 100}% ${inspectorCoords.y * 100}%`,
-                      backgroundSize: `${280 * zoomLevel}%`,
+                      backgroundSize: '300%',
                       backgroundRepeat: 'no-repeat',
                     }}
                   />
-                  <div className="absolute top-2 left-2 px-2.5 py-1 rounded bg-[#050709]/85 text-[10px] font-mono text-[#FFB547] border border-[#FFB547]/40">
+                  <div className="absolute top-2 left-2 px-2.5 py-0.5 rounded bg-[#050709]/85 text-[10px] font-mono text-[#FFB547]">
                     ORIGINAL (2.8&times; LOUPE)
-                  </div>
-                  {/* Crosshair Guide */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-12 h-12 border border-[#00E5FF]/60 rounded-full flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-[#00E5FF]" />
-                    </div>
                   </div>
                 </div>
 
-                {/* Right Loupe: Restored Clean */}
-                <div className="relative rounded-xl overflow-hidden border border-[#00FFA3]/60 bg-[#0B1117] h-[340px] sm:h-[380px] shadow-[0_0_25px_rgba(0,255,163,0.15)]">
+                {/* Right Loupe: Restored */}
+                <div className="relative rounded-xl overflow-hidden border border-[#00FFA3]/60 bg-[#050709]/95 shadow-[0_0_20px_rgba(0,255,163,0.2)]">
                   <div
                     className="w-full h-full"
                     style={{
-                      backgroundImage: `url(${restoredUrl})`,
+                      backgroundImage: `url(${demoData?.restored_url || '/samples/demo_restored_clean.jpg'})`,
                       backgroundPosition: `${inspectorCoords.x * 100}% ${inspectorCoords.y * 100}%`,
-                      backgroundSize: `${280 * zoomLevel}%`,
+                      backgroundSize: '300%',
                       backgroundRepeat: 'no-repeat',
                     }}
                   />
-                  <div className="absolute top-2 right-2 px-2.5 py-1 rounded bg-[#050709]/85 text-[10px] font-mono text-[#00FFA3] border border-[#00FFA3]/40 font-bold">
+                  <div className="absolute top-2 right-2 px-2.5 py-0.5 rounded bg-[#050709]/85 text-[10px] font-mono text-[#00FFA3] font-bold">
                     RESTORED (2.8&times; LOUPE)
-                  </div>
-                  {/* Crosshair Guide */}
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <div className="w-12 h-12 border border-[#00FFA3]/70 rounded-full flex items-center justify-center">
-                      <div className="w-2 h-2 rounded-full bg-[#00FFA3]" />
-                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Inspector Coordinate Presets (Non-Hover Accessible Method) */}
-              <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-[#101820] border border-[#22323D] text-[11px] font-mono">
+              {/* Inspector Presets Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-[#0B1117]/95 border border-[#22323D] text-[11px] font-mono">
                 <div className="flex items-center space-x-2 text-[#94A3B8]">
                   <span>COORDINATES:</span>
                   <span className="text-[#00E5FF]">X: {(inspectorCoords.x * 100).toFixed(0)}%</span>
@@ -618,19 +823,19 @@ export default function RestorationChamber3D({
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <span className="text-[#94A3B8]">PRESET REGIONS:</span>
+                  <span className="text-[#94A3B8]">FOCUS TARGETS:</span>
                   {[
-                    { label: 'PORTRAIT FOCUS', x: 0.22, y: 0.35 },
-                    { label: 'MICROTEXT FOCUS', x: 0.50, y: 0.50 },
-                    { label: 'SIGNATURE & SEAL', x: 0.78, y: 0.82 },
-                  ].map((preset) => (
+                    { label: 'PORTRAIT', x: 0.22, y: 0.35 },
+                    { label: 'MICROTEXT', x: 0.50, y: 0.50 },
+                    { label: 'SIGNATURE', x: 0.78, y: 0.82 },
+                  ].map((p) => (
                     <button
-                      key={preset.label}
+                      key={p.label}
                       type="button"
-                      onClick={() => setInspectorCoords({ x: preset.x, y: preset.y })}
+                      onClick={() => setInspectorCoords({ x: p.x, y: p.y })}
                       className="px-2.5 py-1 rounded bg-[#17232C] hover:bg-[#22323D] text-[#DCE7EC] hover:text-[#00FFA3] border border-[#22323D] transition-colors"
                     >
-                      {preset.label}
+                      {p.label}
                     </button>
                   ))}
                 </div>
@@ -638,10 +843,15 @@ export default function RestorationChamber3D({
             </div>
           )}
 
+          {/* Telemetry Badge (Bottom Left) */}
+          <div className="absolute bottom-3 left-3 z-20 flex items-center space-x-2 px-3 py-1 rounded-lg bg-[#050709]/85 backdrop-blur-md border border-[#22323D] text-[10px] font-mono text-[#00E5FF]">
+            <Layers className="w-3.5 h-3.5 text-[#00FFA3]" />
+            <span>3D PHYSICAL CARD MESHES &bull; CLICK BUTTONS TO MERGE OR SEPARATE</span>
+          </div>
         </div>
 
         {/* ============================================================== */}
-        {/* BOTTOM QUANTITATIVE VERIFICATION METRICS STRIP                 */}
+        {/* BOTTOM QUANTITATIVE AUDIT METRICS STRIP                        */}
         {/* ============================================================== */}
         <div className="relative z-30 mt-4 pt-4 border-t border-[#22323D]/60 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center font-mono">
           <div className="p-2.5 rounded-xl bg-[#101820] border border-[#22323D]">
