@@ -1,8 +1,7 @@
-import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
-  Sliders,
   Columns,
   Scan,
   Crosshair,
@@ -23,11 +22,10 @@ import {
 } from 'lucide-react';
 
 // ==============================================================
-// 3D CARDS SCENE: MERGE, SEPARATE, OVERLAP & INSPECT IN REAL 3D
+// 3D CARDS SCENE: SEPARATE, OVERLAP & INSPECT IN REAL 3D
 // ==============================================================
 function Physical3DDocumentCards({
-  mode = 'split',
-  splitPos = 50,
+  mode = 'side-by-side',
   laserPos = 50,
   zoomLevel = 1.0,
   textures,
@@ -38,17 +36,11 @@ function Physical3DDocumentCards({
   const leftCardRef = useRef();
   const rightCardRef = useRef();
   const laserBeamRef = useRef();
-  const splitBeamRef = useRef();
 
   const docW = isMobile ? 3.2 : 4.0;
   const docH = isMobile ? 2.2 : 2.7;
 
-  // Local clipping planes for Interactive Split and Laser Reveal
-  const splitClipPlane = useMemo(() => {
-    // Normal vector pointing in +X: keeps pixels where x < constant (reveals right)
-    return new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
-  }, []);
-
+  // Local clipping plane for Laser Reveal mode
   const laserClipPlane = useMemo(() => {
     return new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0);
   }, []);
@@ -65,10 +57,9 @@ function Physical3DDocumentCards({
 
     // TARGET TRANSFORMS BASED ON SELECTED MODE:
     // -------------------------------------------------------------
-    // MODE 1: 'split' -> Both cards merge into center (X = 0, Z = 0)
-    // MODE 2: 'side-by-side' -> Left card flies to -2.3, Right to +2.3, rotate outward
-    // MODE 3: 'laser-reveal' -> Left card slightly behind (Z = -0.05), Right card in front (Z = +0.08)
-    // MODE 4: 'inspector' -> Cards separate to -2.3 and +2.3 with flat inspection angle
+    // MODE 1: 'side-by-side' -> Left card flies to -2.35, Right to +2.35, rotate outward
+    // MODE 2: 'laser-reveal' -> Left card slightly behind (Z = -0.12), Right card in front (Z = +0.12)
+    // MODE 3: 'inspector'    -> Cards separate to -2.35 and +2.35 with flat inspection angle
     // -------------------------------------------------------------
     let targetLeftX = 0;
     let targetLeftY = floatY + py;
@@ -77,21 +68,13 @@ function Physical3DDocumentCards({
 
     let targetRightX = 0;
     let targetRightY = floatY + py;
-    let targetRightZ = 0.02; // slightly in front when merged
+    let targetRightZ = 0.02;
     let targetRightRotY = floatRotY;
 
     const sepX = isMobile ? 1.8 : 2.35;
 
-    if (mode === 'split') {
-      // Merged into single central document
-      targetLeftX = px;
-      targetLeftZ = 0;
-      targetRightX = px;
-      targetRightZ = 0.02;
-      targetLeftRotY = floatRotY;
-      targetRightRotY = floatRotY;
-    } else if (mode === 'side-by-side') {
-      // Physically separate and rotate outward in 3D
+    if (mode === 'side-by-side') {
+      // Physically separate into two independent 3D cards rotating outward
       targetLeftX = -sepX + px;
       targetLeftZ = -0.15;
       targetLeftRotY = isMobile ? 0 : 0.18 + floatRotY;
@@ -118,7 +101,6 @@ function Physical3DDocumentCards({
       targetRightRotY = isMobile ? 0 : -0.08 + floatRotY;
     }
 
-    const lerpSpeed = delta * 4.5;
     const finalScale = zoomLevel * (isMobile ? 0.85 : 1.0);
 
     // Smoothly animate Left Card (Original)
@@ -141,17 +123,7 @@ function Physical3DDocumentCards({
       rightCardRef.current.scale.setScalar(THREE.MathUtils.damp(rightCardRef.current.scale.x, finalScale, 6, delta));
     }
 
-    // Dynamic 3D clipping planes:
-    // Update Interactive Split Divider position in 3D world space
-    const splitOffset = ((splitPos / 100) - 0.5) * docW;
-    splitClipPlane.constant = (mode === 'split' ? splitOffset : 100);
-
-    if (splitBeamRef.current) {
-      splitBeamRef.current.position.x = splitOffset;
-      splitBeamRef.current.visible = (mode === 'split');
-    }
-
-    // Update Laser Sweep position in 3D world space
+    // Dynamic 3D Laser Reveal clipping plane & beam
     const laserOffset = ((laserPos / 100) - 0.5) * docW;
     laserClipPlane.constant = (mode === 'laser-reveal' ? laserOffset : 100);
 
@@ -166,7 +138,7 @@ function Physical3DDocumentCards({
       {/* ============================================================== */}
       {/* 3D DOCUMENT CARD 1: ORIGINAL DEGRADED (1987 ARCHIVE)           */}
       {/* ============================================================== */}
-      <group ref={leftCardRef} position={[mode === 'side-by-side' ? -2.35 : 0, 0, 0]}>
+      <group ref={leftCardRef} position={[-2.35, 0, 0]}>
         {/* Physical Shallow Card Slab */}
         <mesh castShadow receiveShadow>
           <boxGeometry args={[docW, docH, 0.03]} />
@@ -197,7 +169,7 @@ function Physical3DDocumentCards({
           <lineBasicMaterial
             color="#FFB547"
             transparent
-            opacity={mode === 'side-by-side' ? 0.95 : 0.6}
+            opacity={0.85}
             blending={THREE.AdditiveBlending}
           />
         </lineSegments>
@@ -216,7 +188,7 @@ function Physical3DDocumentCards({
       {/* ============================================================== */}
       {/* 3D DOCUMENT CARD 2: RESTORED DIGITAL ASSET (IDRESTORE AI)       */}
       {/* ============================================================== */}
-      <group ref={rightCardRef} position={[mode === 'side-by-side' ? 2.35 : 0, 0, 0.02]}>
+      <group ref={rightCardRef} position={[2.35, 0, 0.02]}>
         {/* Physical Shallow Card Slab */}
         <mesh castShadow receiveShadow>
           <boxGeometry args={[docW, docH, 0.03]} />
@@ -227,7 +199,7 @@ function Physical3DDocumentCards({
           />
         </mesh>
 
-        {/* Front Textured Surface with Clipping Plane for Split & Laser */}
+        {/* Front Textured Surface with Clipping Plane for Laser */}
         <mesh position={[0, 0, 0.018]}>
           <planeGeometry args={[docW * 0.98, docH * 0.98]} />
           {textures.restored ? (
@@ -235,13 +207,7 @@ function Physical3DDocumentCards({
               map={textures.restored}
               roughness={0.15}
               metalness={0.25}
-              clippingPlanes={
-                mode === 'split'
-                  ? [splitClipPlane]
-                  : mode === 'laser-reveal'
-                  ? [laserClipPlane]
-                  : []
-              }
+              clippingPlanes={mode === 'laser-reveal' ? [laserClipPlane] : []}
               clipShadows
             />
           ) : (
@@ -289,23 +255,6 @@ function Physical3DDocumentCards({
               opacity={0.35}
               blending={THREE.AdditiveBlending}
             />
-          </mesh>
-        </group>
-
-        {/* 3D Cyan Split Divider Beam (Interactive Split Mode) */}
-        <group ref={splitBeamRef} visible={mode === 'split'} position={[0, 0, 0.035]}>
-          <mesh>
-            <planeGeometry args={[0.05, docH * 1.02]} />
-            <meshBasicMaterial
-              color="#00E5FF"
-              transparent
-              opacity={0.95}
-              blending={THREE.AdditiveBlending}
-            />
-          </mesh>
-          <mesh position={[0, 0, 0.01]}>
-            <circleGeometry args={[0.18, 24]} />
-            <meshBasicMaterial color="#00E5FF" transparent opacity={0.8} />
           </mesh>
         </group>
       </group>
@@ -398,10 +347,8 @@ export default function RestorationChamber3D({
   loadLiveDemo,
   scrollProgress = 0,
 }) {
-  // Independent comparison state
-  const [mode, setMode] = useState('split'); // 'split' | 'side-by-side' | 'laser-reveal' | 'inspector'
-  const [splitPos, setSplitPos] = useState(50);
-  const [isDragging, setIsDragging] = useState(false);
+  // Independent comparison state (Side-by-Side is the primary default)
+  const [mode, setMode] = useState('side-by-side'); // 'side-by-side' | 'laser-reveal' | 'inspector'
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -446,33 +393,6 @@ export default function RestorationChamber3D({
     setPointer({ x, y });
   };
 
-  // Dragging split divider
-  const handleSplitDrag = useCallback((clientX) => {
-    if (!canvasWrapperRef.current) return;
-    const rect = canvasWrapperRef.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-    const percent = Math.max(0, Math.min((x / rect.width) * 100, 100));
-    setSplitPos(percent);
-  }, []);
-
-  useEffect(() => {
-    if (!isDragging) return;
-
-    const onPointerMove = (e) => {
-      e.preventDefault();
-      handleSplitDrag(e.clientX);
-    };
-    const onPointerUp = () => setIsDragging(false);
-
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-
-    return () => {
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-    };
-  }, [isDragging, handleSplitDrag]);
-
   // Laser Reveal Auto-Sweep
   useEffect(() => {
     if (mode !== 'laser-reveal' || !laserPlaying) return;
@@ -508,7 +428,6 @@ export default function RestorationChamber3D({
   };
 
   const handleReset = () => {
-    setSplitPos(50);
     setZoomLevel(1);
     setLaserPos(50);
     setLaserPlaying(true);
@@ -554,7 +473,7 @@ export default function RestorationChamber3D({
         <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-2 border-r-2 border-[#00FFA3] z-40 pointer-events-none" />
 
         {/* ============================================================== */}
-        {/* TOP HUD: STATUS BAR, 4 MODE BUTTONS & TOOLS                    */}
+        {/* TOP HUD: STATUS BAR, MODE BUTTONS & TOOLS                      */}
         {/* ============================================================== */}
         <div className="relative z-30 flex flex-wrap items-center justify-between gap-3 pb-4 mb-4 border-b border-[#22323D]/80 text-xs font-mono">
           <div className="flex items-center space-x-2.5">
@@ -573,14 +492,13 @@ export default function RestorationChamber3D({
           </div>
         </div>
 
-        {/* 4 Mode Buttons & Tools Toolbar */}
+        {/* 3 Mode Buttons & Tools Toolbar */}
         <div className="relative z-30 flex flex-wrap items-center justify-between gap-3 mb-4">
-          {/* THE 4 CLICK-TO-TRANSFORM MODE BUTTONS */}
+          {/* THE 3 CLICK-TO-TRANSFORM MODE BUTTONS */}
           <div className="flex items-center space-x-1.5 p-1 rounded-xl bg-[#101820] border border-[#22323D] text-xs font-mono">
             {[
-              { id: 'split', label: 'Interactive Split (Merge)', icon: Sliders },
-              { id: 'side-by-side', label: 'Side-by-Side (Separate)', icon: Columns },
-              { id: 'laser-reveal', label: 'Laser Reveal (Overlap)', icon: Scan },
+              { id: 'side-by-side', label: 'Side-by-Side (3D Separation)', icon: Columns },
+              { id: 'laser-reveal', label: 'Laser Reveal (3D Overlap)', icon: Scan },
               { id: 'inspector', label: 'Detail Inspector', icon: Crosshair },
             ].map((m) => {
               const Icon = m.icon;
@@ -644,7 +562,7 @@ export default function RestorationChamber3D({
         </div>
 
         {/* ============================================================== */}
-        {/* REAL 3D CANVAS VIEWPORT: CARDS SEPARATE, MERGE & ROTATE        */}
+        {/* REAL 3D CANVAS VIEWPORT: CARDS SEPARATE, OVERLAP & ROTATE      */}
         {/* ============================================================== */}
         <div
           ref={canvasWrapperRef}
@@ -657,7 +575,7 @@ export default function RestorationChamber3D({
               antialias: true,
               alpha: true,
               powerPreference: 'high-performance',
-              localClippingEnabled: true, // Enables true 3D clipping for Split & Laser!
+              localClippingEnabled: true,
             }}
             dpr={[1, 1.5]}
             style={{ background: 'transparent' }}
@@ -671,10 +589,9 @@ export default function RestorationChamber3D({
             <ChamberGimbalRings />
             <ChamberAtmosphericDust count={45} />
 
-            {/* The Physical 3D Document Cards that Merge and Separate on Click! */}
+            {/* The Physical 3D Document Cards that Animate on Click! */}
             <Physical3DDocumentCards
               mode={mode}
-              splitPos={splitPos}
               laserPos={laserPos}
               zoomLevel={zoomLevel}
               textures={textures}
@@ -687,38 +604,7 @@ export default function RestorationChamber3D({
           {/* HTML ACCESSIBLE INTERACTION OVERLAYS                           */}
           {/* ============================================================== */}
 
-          {/* 1. Interactive Split Draggable Beam Overlay (When mode === 'split') */}
-          {mode === 'split' && (
-            <div
-              className="absolute inset-0 z-30 cursor-ew-resize select-none"
-              style={{ touchAction: 'none' }}
-              onPointerDown={(e) => {
-                setIsDragging(true);
-                handleSplitDrag(e.clientX);
-              }}
-            >
-              {/* Floating Divider Handle in Center Viewport */}
-              <div
-                className="absolute top-0 bottom-0 z-40 flex items-center justify-center pointer-events-none"
-                style={{ left: `${splitPos}%`, transform: 'translateX(-50%)' }}
-              >
-                <div className="w-1 h-full bg-[#00E5FF] shadow-[0_0_18px_#00E5FF]" />
-                <div className="absolute w-10 h-10 rounded-full bg-[#101820] border-2 border-[#00E5FF] shadow-[0_0_20px_rgba(0,229,255,0.4)] flex items-center justify-center text-[#00E5FF]">
-                  <Sliders className="w-4 h-4" />
-                </div>
-              </div>
-
-              {/* Labels */}
-              <div className="absolute top-4 left-6 px-3 py-1 rounded bg-[#050709]/85 border border-[#FFB547]/40 text-[10px] font-mono text-[#FFB547]">
-                ORIGINAL (1987)
-              </div>
-              <div className="absolute top-4 right-6 px-3 py-1 rounded bg-[#050709]/85 border border-[#00FFA3]/50 text-[10px] font-mono text-[#00FFA3] font-bold">
-                RESTORED (IDRESTORE AI)
-              </div>
-            </div>
-          )}
-
-          {/* 2. Side-by-Side Floating Labels Overlay (When mode === 'side-by-side') */}
+          {/* 1. Side-by-Side Floating Labels Overlay (When mode === 'side-by-side') */}
           {mode === 'side-by-side' && (
             <div className="absolute inset-x-0 top-4 z-30 flex justify-between px-8 sm:px-16 pointer-events-none text-xs font-mono">
               <div className="px-3.5 py-1.5 rounded-lg bg-[#050709]/85 border border-[#FFB547]/50 text-[#FFB547] shadow-[0_0_15px_rgba(255,181,71,0.2)]">
@@ -730,7 +616,7 @@ export default function RestorationChamber3D({
             </div>
           )}
 
-          {/* 3. Laser Reveal Controls Overlay (When mode === 'laser-reveal') */}
+          {/* 2. Laser Reveal Controls Overlay (When mode === 'laser-reveal') */}
           {mode === 'laser-reveal' && (
             <div className="absolute inset-x-0 bottom-4 z-30 px-6 pointer-events-auto">
               <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[#0B1117]/95 backdrop-blur-md border border-[#22323D] text-xs font-mono max-w-xl mx-auto shadow-[0_8px_30px_rgba(0,0,0,0.8)]">
@@ -773,7 +659,7 @@ export default function RestorationChamber3D({
             </div>
           )}
 
-          {/* 4. Detail Inspector Loupes Overlay (When mode === 'inspector') */}
+          {/* 3. Detail Inspector Loupes Overlay (When mode === 'inspector') */}
           {mode === 'inspector' && (
             <div
               onMouseMove={handleInspectorMove}
@@ -846,7 +732,7 @@ export default function RestorationChamber3D({
           {/* Telemetry Badge (Bottom Left) */}
           <div className="absolute bottom-3 left-3 z-20 flex items-center space-x-2 px-3 py-1 rounded-lg bg-[#050709]/85 backdrop-blur-md border border-[#22323D] text-[10px] font-mono text-[#00E5FF]">
             <Layers className="w-3.5 h-3.5 text-[#00FFA3]" />
-            <span>3D PHYSICAL CARD MESHES &bull; CLICK BUTTONS TO MERGE OR SEPARATE</span>
+            <span>3D PHYSICAL CARD MESHES &bull; CLICK BUTTONS TO SEPARATE OR OVERLAP</span>
           </div>
         </div>
 

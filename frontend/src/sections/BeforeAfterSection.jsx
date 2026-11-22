@@ -33,7 +33,7 @@ export default function BeforeAfterSection({
         </h2>
 
         <p className="text-base text-[#94A3B8] max-w-2xl mx-auto leading-relaxed bg-[#050709]/40 backdrop-blur-xs rounded-lg p-1">
-          Observe our 3D Restoration Chamber in action: as you scroll, watch the historical document float into the zero-gravity scanner, separate into 3D split-reality panels, and explore micro-details with the synchronized loupe inspector.
+          Explore our physical 3D Restoration Chamber: click to watch the document cards separate in 3D zero-gravity space, trigger an automated laser scanning sweep, or inspect microtext with the synchronized dual loupe.
         </p>
 
         {/* Real 3D Restoration Chamber with 4-Phase Transformation */}
