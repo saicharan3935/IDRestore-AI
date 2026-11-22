@@ -18,7 +18,6 @@ import {
   Info,
   CheckCircle2
 } from 'lucide-react';
-import PortalAstronaut from './PortalAstronaut';
 
 // ==============================================================
 // 3D CARDS MESH SCENE: SPLIT, SEPARATE, OVERLAP & INSPECT
@@ -1043,14 +1042,6 @@ export default function RestorationChamber3D({
             <CameraRig
               scrollProgress={scrollProgress}
               reducedMotion={reducedMotion}
-            />
-
-            {/* Tiny Scroll-Reactive Sci-Fi Astronaut Companion */}
-            <PortalAstronaut
-              basePosition={[isMobile ? -1.45 : -2.15, 0.75, 0.65]}
-              reducedMotion={reducedMotion}
-              isMobile={isMobile}
-              scrollProgress={scrollProgress}
             />
 
             {/* The Physical 3D Document Cards with Natural Mouse Tilt */}

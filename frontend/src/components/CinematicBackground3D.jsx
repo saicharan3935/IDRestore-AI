@@ -2,6 +2,7 @@ import React, { useRef, useMemo, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Float, MeshDistortMaterial } from '@react-three/drei';
 import * as THREE from 'three';
+import GlobalAstronaut from './cinematic/GlobalAstronaut';
 
 // 1. ORBITAL ENERGY RINGS (HERO PHASE)
 function OrbitalEnergyRings({ opacity = 1.0 }) {
@@ -714,6 +715,13 @@ export default function CinematicBackground3D({ scrollProgress = 0, pointer = { 
         <MasterSceneDirector
           scrollProgress={isReducedMotion ? 0 : scrollProgress}
           pointer={pointer}
+        />
+
+        {/* Global 3D Astronaut Scroll Companion */}
+        <GlobalAstronaut
+          scrollProgress={scrollProgress}
+          pointer={pointer}
+          reducedMotion={isReducedMotion}
         />
       </Canvas>
     </div>

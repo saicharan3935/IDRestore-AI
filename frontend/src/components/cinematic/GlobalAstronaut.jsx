@@ -1,27 +1,25 @@
 import React, { useRef, useMemo } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { useAstronautMotion } from '../../hooks/useAstronautMotion';
+import { useGlobalAstronautMotion } from '../../hooks/useGlobalAstronautMotion';
 
 // ==============================================================
-// JETPACK EXHAUST PARTICLES (ACTIVE DURING UPWARD THRUST)
+// 1. JETPACK EXHAUST PARTICLES (ACTIVE DURING UPWARD THRUST & LIFTOFF)
 // ==============================================================
-function JetpackExhaustParticles({ count = 20, flameIntensityRef }) {
+function JetpackExhaustParticles({ count = 24, flameIntensityRef }) {
   const pointsRef = useRef();
 
-  const [positions, scales, speeds] = useMemo(() => {
+  const [positions, speeds] = useMemo(() => {
     const pos = new Float32Array(count * 3);
-    const sc = new Float32Array(count);
     const sp = new Float32Array(count);
 
     for (let i = 0; i < count; i++) {
-      pos[i * 3] = (Math.random() - 0.5) * 0.12;
-      pos[i * 3 + 1] = -Math.random() * 0.35;
-      pos[i * 3 + 2] = (Math.random() - 0.5) * 0.12;
-      sc[i] = Math.random() * 0.04 + 0.02;
-      sp[i] = Math.random() * 1.2 + 0.8;
+      pos[i * 3] = (Math.random() - 0.5) * 0.14;
+      pos[i * 3 + 1] = -Math.random() * 0.40;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 0.14;
+      sp[i] = Math.random() * 1.5 + 0.9;
     }
-    return [pos, sc, sp];
+    return [pos, sp];
   }, [count]);
 
   useFrame((_, delta) => {
@@ -37,16 +35,16 @@ function JetpackExhaustParticles({ count = 20, flameIntensityRef }) {
     const array = pointsRef.current.geometry.attributes.position.array;
 
     for (let i = 0; i < count; i++) {
-      array[i * 3 + 1] -= delta * speeds[i] * 1.8;
+      array[i * 3 + 1] -= delta * speeds[i] * 2.2;
 
-      if (array[i * 3 + 1] < -0.45) {
-        array[i * 3] = (Math.random() - 0.5) * 0.12;
+      if (array[i * 3 + 1] < -0.55) {
+        array[i * 3] = (Math.random() - 0.5) * 0.14;
         array[i * 3 + 1] = -0.05;
-        array[i * 3 + 2] = (Math.random() - 0.5) * 0.12;
+        array[i * 3 + 2] = (Math.random() - 0.5) * 0.14;
       }
     }
     pointsRef.current.geometry.attributes.position.needsUpdate = true;
-    pointsRef.current.material.opacity = intensity * 0.75;
+    pointsRef.current.material.opacity = intensity * 0.85;
   });
 
   return (
@@ -55,10 +53,10 @@ function JetpackExhaustParticles({ count = 20, flameIntensityRef }) {
         <bufferAttribute attach="attributes-position" count={count} array={positions} itemSize={3} />
       </bufferGeometry>
       <pointsMaterial
-        size={0.045}
+        size={0.048}
         color="#00FFA3"
         transparent
-        opacity={0.7}
+        opacity={0.8}
         blending={THREE.AdditiveBlending}
         depthWrite={false}
       />
@@ -67,15 +65,15 @@ function JetpackExhaustParticles({ count = 20, flameIntensityRef }) {
 }
 
 // ==============================================================
-// MASTER COMPONENT: PORTAL ASTRONAUT
+// 2. MASTER GLOBAL ASTRONAUT COMPONENT
 // ==============================================================
-export default function PortalAstronaut({
-  basePosition = [-2.15, 0.75, 0.65],
-  reducedMotion = false,
-  isMobile = false,
+export default function GlobalAstronaut({
   scrollProgress = 0,
+  pointer = { x: 0, y: 0 },
+  reducedMotion = false,
 }) {
   const rootRef = useRef();
+  const helmetRef = useRef();
   const leftFlameRef = useRef();
   const rightFlameRef = useRef();
   const leftOuterFlameRef = useRef();
@@ -88,11 +86,13 @@ export default function PortalAstronaut({
   const rightArmRef = useRef();
   const haloRingRef = useRef();
 
-  const { motionRef, update } = useAstronautMotion({
-    basePosition,
-    reducedMotion,
-    isMobile,
+  const { viewport } = useThree();
+
+  const { update } = useGlobalAstronautMotion({
     scrollProgress,
+    pointer,
+    reducedMotion,
+    viewportWidth: viewport.width,
   });
 
   useFrame((state, delta) => {
@@ -102,15 +102,22 @@ export default function PortalAstronaut({
 
     if (!rootRef.current) return;
 
-    // Apply smooth positions & rotations
+    // Apply global world position & rotation
     rootRef.current.position.set(m.x, m.y, m.z);
     rootRef.current.rotation.set(m.rotX, m.rotY, m.rotZ);
+    rootRef.current.scale.set(m.scale, m.scale, m.scale);
 
-    // Jetpack Flame dynamics (active when scrolling up)
+    // Subtle helmet glance toward user cursor
+    if (helmetRef.current) {
+      helmetRef.current.rotation.y = m.helmetLookX;
+      helmetRef.current.rotation.x = m.helmetLookY;
+    }
+
+    // Jetpack Flame dynamics (active when scrolling up or liftoff)
     const flameActive = m.flameIntensity > 0.03;
     const flicker = 1.0 + Math.sin(time * 38) * 0.22;
-    const flameScaleY = m.flameIntensity * flicker;
-    const flameScaleXZ = m.flameIntensity * (0.85 + Math.cos(time * 30) * 0.15);
+    const flameScaleY = m.flameIntensity * flicker * (m.isLiftoff ? 1.5 : 1.0);
+    const flameScaleXZ = m.flameIntensity * (0.85 + Math.cos(time * 30) * 0.15) * (m.isLiftoff ? 1.3 : 1.0);
 
     if (leftFlameRef.current && rightFlameRef.current) {
       leftFlameRef.current.visible = flameActive;
@@ -126,43 +133,89 @@ export default function PortalAstronaut({
       rightOuterFlameRef.current.scale.set(flameScaleXZ * 1.35, flameScaleY * 1.3, flameScaleXZ * 1.35);
     }
 
-    // Limb zero-gravity animation
-    if (leftLegRef.current) leftLegRef.current.rotation.x = m.legSwing;
-    if (rightLegRef.current) rightLegRef.current.rotation.x = -m.legSwing * 0.85;
-    if (leftArmRef.current) leftArmRef.current.rotation.x = m.armSwing;
-    if (rightArmRef.current) rightArmRef.current.rotation.x = -m.armSwing * 0.9;
+    // Specialized character expressions based on active section pose
+    if (m.pose === 'hero-wave') {
+      // Hero: Friendly wave with right arm
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.x = -1.8 + Math.sin(time * 6) * 0.35;
+        rightArmRef.current.rotation.z = -0.45 + Math.cos(time * 6) * 0.25;
+      }
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.x = m.armSwing;
+        leftArmRef.current.rotation.z = 0;
+      }
+      if (leftLegRef.current) leftLegRef.current.rotation.x = m.legSwing;
+      if (rightLegRef.current) rightLegRef.current.rotation.x = -m.legSwing * 0.85;
+    } else if (m.pose === 'inspect') {
+      // How It Works / Laboratory: Analytical inspection pose near chin
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.x = -1.35 + Math.sin(time * 2) * 0.08;
+        leftArmRef.current.rotation.y = 0.45;
+        leftArmRef.current.rotation.z = 0.2;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.x = 0.15 + m.armSwing;
+        rightArmRef.current.rotation.z = 0;
+      }
+      if (leftLegRef.current) leftLegRef.current.rotation.x = m.legSwing;
+      if (rightLegRef.current) rightLegRef.current.rotation.x = -m.legSwing * 0.85;
+    } else if (m.isLiftoff) {
+      // Footer Liftoff: Aerodynamic backward swept limbs
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.x = 0.85;
+        leftArmRef.current.rotation.y = 0;
+        leftArmRef.current.rotation.z = 0.15;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.x = 0.85;
+        rightArmRef.current.rotation.y = 0;
+        rightArmRef.current.rotation.z = -0.15;
+      }
+      if (leftLegRef.current) leftLegRef.current.rotation.x = 0.55;
+      if (rightLegRef.current) rightLegRef.current.rotation.x = 0.55;
+    } else {
+      // Standard zero-gravity floating limbs
+      if (leftLegRef.current) leftLegRef.current.rotation.x = m.legSwing;
+      if (rightLegRef.current) rightLegRef.current.rotation.x = -m.legSwing * 0.85;
+      if (leftArmRef.current) {
+        leftArmRef.current.rotation.x = m.armSwing;
+        leftArmRef.current.rotation.y = 0;
+        leftArmRef.current.rotation.z = 0;
+      }
+      if (rightArmRef.current) {
+        rightArmRef.current.rotation.x = -m.armSwing * 0.9;
+        rightArmRef.current.rotation.y = 0;
+        rightArmRef.current.rotation.z = 0;
+      }
+    }
 
     // Halo micro-rotation
     if (haloRingRef.current) {
-      haloRingRef.current.rotation.z += delta * 0.6;
+      haloRingRef.current.rotation.z += delta * 0.65;
     }
   });
-
-  // Noticeable micro-character scale (clearly visible without dominating)
-  const charScale = isMobile ? 0.62 : 0.82;
 
   return (
     <group
       ref={rootRef}
-      scale={[charScale, charScale, charScale]}
-      // Disables pointer raycasting so astronaut never steals clicks or divider drags
+      // Disable pointer raycasting completely so astronaut never steals clicks or slider drags
       raycast={() => null}
     >
-      {/* Dedicated Local Point Light to Guarantee High Visibility */}
-      <pointLight position={[0, 0.4, 0.6]} intensity={2.4} color="#00E5FF" distance={4.0} />
+      {/* Dedicated Local Point Light to Guarantee High Contrast & Crisp Visibility */}
+      <pointLight position={[0, 0.4, 0.6]} intensity={2.6} color="#00E5FF" distance={4.5} />
 
       {/* Floating Holographic Cyber Halo above Helmet */}
       <group position={[0, 0.64, 0]} rotation={[Math.PI / 2.5, 0, 0]}>
         <mesh ref={haloRingRef}>
           <ringGeometry args={[0.16, 0.175, 24]} />
-          <meshBasicMaterial color="#00E5FF" transparent opacity={0.65} blending={THREE.AdditiveBlending} />
+          <meshBasicMaterial color="#00E5FF" transparent opacity={0.7} blending={THREE.AdditiveBlending} />
         </mesh>
       </group>
 
       {/* ============================================================== */}
-      {/* 1. HELMET & VISOR                                              */}
+      {/* 1. HELMET & VISOR (INTERACTIVE CURSOR LOOK-AT)                 */}
       {/* ============================================================== */}
-      <group position={[0, 0.38, 0]}>
+      <group ref={helmetRef} position={[0, 0.38, 0]}>
         {/* Platinum White Helmet Shell */}
         <mesh castShadow>
           <sphereGeometry args={[0.22, 28, 28]} />
@@ -182,7 +235,7 @@ export default function PortalAstronaut({
             roughness={0.05}
             metalness={0.98}
             emissive="#00E5FF"
-            emissiveIntensity={0.6}
+            emissiveIntensity={0.65}
           />
         </mesh>
 
@@ -217,7 +270,7 @@ export default function PortalAstronaut({
           />
         </mesh>
 
-        {/* Chest Cyber-Badge / Life Support Display */}
+        {/* Chest Cyber-Badge / Telemetry Display */}
         <mesh position={[0, 0.06, 0.17]}>
           <boxGeometry args={[0.095, 0.065, 0.015]} />
           <meshStandardMaterial
@@ -245,7 +298,7 @@ export default function PortalAstronaut({
           <meshStandardMaterial color="#101820" roughness={0.25} metalness={0.88} />
         </mesh>
 
-        {/* Twin Fuel Cannisters */}
+        {/* Twin Fuel Canisters */}
         <mesh position={[-0.085, 0, 0.01]}>
           <cylinderGeometry args={[0.044, 0.044, 0.27, 16]} />
           <meshStandardMaterial color="#17232C" roughness={0.3} metalness={0.85} />
@@ -323,7 +376,7 @@ export default function PortalAstronaut({
       </group>
 
       {/* Particle Exhaust Stream */}
-      <JetpackExhaustParticles count={20} flameIntensityRef={flameIntensityRef} />
+      <JetpackExhaustParticles count={24} flameIntensityRef={flameIntensityRef} />
 
       {/* ============================================================== */}
       {/* 4. ARMS & MITTEN GLOVES                                         */}
