@@ -128,8 +128,8 @@ export default function LandingPage({ onLaunchWorkspace, onNavigateAuth }) {
     {
       icon: Eye,
       title: 'Face Restoration',
-      description: 'Restores micro-contrast on personnel identification portraits with explicit biometric integrity disclaimers.',
-      tag: 'BIOMETRIC FIDELITY',
+      description: 'Restores micro-contrast on personnel identification portraits with explicit integrity advisories.',
+      tag: 'PORTRAIT ENHANCEMENT',
       metric: 'MICRO-CONTRAST'
     },
     {
