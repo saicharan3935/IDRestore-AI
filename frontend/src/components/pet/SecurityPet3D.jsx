@@ -9,7 +9,7 @@ import PetArms from './PetArms';
 // ==============================================================
 // 3D BYTE ROBOTIC CHARACTER MESH
 // ==============================================================
-function PetModel({
+export function PetModel({
   passwordVisible = false,
   passwordFocused = false,
   isTypingPassword = false,
@@ -120,7 +120,7 @@ function PetModel({
 }
 
 // Holographic Floor Pedestal beneath BYTE
-function HolographicPedestal() {
+export function HolographicPedestal() {
   const ring1 = useRef();
   const ring2 = useRef();
 

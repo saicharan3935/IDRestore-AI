@@ -168,7 +168,7 @@ export default function App() {
 
               <main className="flex-1 overflow-y-auto">
                 {currentTab === 'overview' && (
-                  <DashboardOverview onNavigateTab={setCurrentTab} />
+                  <DashboardOverview onNavigateTab={setCurrentTab} user={user} />
                 )}
                 {currentTab === 'restore' && <RestorationWorkspace />}
                 {currentTab === 'analysis' && (
