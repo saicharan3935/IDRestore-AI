@@ -146,15 +146,21 @@ export const api = {
   },
 
   async forgotPassword(email) {
-    const res = await fetch(`${API_BASE}/auth/forgot-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ email })
-    });
+    let res;
+    try {
+      res = await fetch(`${API_BASE}/auth/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: (email || '').trim().toLowerCase() })
+      });
+    } catch (networkErr) {
+      throw new Error('Unable to connect to the server. Please verify the backend is online and try again.');
+    }
+
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Password recovery failed');
+      const errMsg = await parseApiError(res, 'Password recovery request failed.');
+      throw new Error(errMsg);
     }
     return res.json();
   },

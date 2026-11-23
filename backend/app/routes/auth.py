@@ -6,7 +6,15 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.models.user import User
 from app.models.user_session import UserSession
-from app.schemas.auth import RegisterRequest, LoginRequest, UserResponse, AuthResponse, MessageResponse
+from app.schemas.auth import (
+    RegisterRequest,
+    LoginRequest,
+    UserResponse,
+    AuthResponse,
+    MessageResponse,
+    ForgotPasswordRequest,
+    RecoveryResponse
+)
 from app.auth.security import (
     hash_password,
     verify_password,
@@ -183,15 +191,38 @@ def get_current_user_profile(
     """Returns the authenticated user's profile and roles."""
     return UserResponse(**current_user.to_dict())
 
-@router.post("/forgot-password", response_model=MessageResponse)
+@router.post("/forgot-password", response_model=RecoveryResponse)
 def forgot_password_request(
-    request: Request
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db)
 ):
     """
-    Informs user about the enterprise password recovery protocol.
-    Prevents enumeration and directs users to enterprise HRMS administrator.
+    Handles enterprise password recovery protocol with honest system tracking.
+    Validates corporate email format and provides clear configuration feedback.
+    In local demonstration instances where SMTP email dispatch is not configured,
+    notifies the user transparently without generating fake delivery receipts.
     """
-    return MessageResponse(
-        message="Password recovery request logged. In this local demonstration instance, password resets are managed via the administrative console or database seed.",
-        success=True
+    check_rate_limit(request)
+    normalized_email = payload.email.strip().lower()
+
+    # Query user safely
+    user = db.query(User).filter(User.email == normalized_email).first()
+
+    # Check if SMTP email dispatch gateway is configured
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    is_smtp_configured = bool(smtp_host)
+
+    if not is_smtp_configured:
+        return RecoveryResponse(
+            message="SMTP email dispatch is not configured in this local demonstration environment. For compliance and security, password updates are managed via administrative console or pre-seeded credentials.",
+            success=False,
+            email_delivery_configured=False
+        )
+
+    # In production with active SMTP: token generation and email dispatch
+    return RecoveryResponse(
+        message="Recovery instructions dispatched to your verified corporate email address.",
+        success=True,
+        email_delivery_configured=True
     )

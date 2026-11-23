@@ -76,3 +76,19 @@ class AuthResponse(BaseModel):
 class MessageResponse(BaseModel):
     message: str
     success: bool = True
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, v: str) -> str:
+        cleaned = v.strip().lower()
+        if not cleaned or "@" not in cleaned:
+            raise ValueError("Please enter a valid corporate email address.")
+        return cleaned
+
+class RecoveryResponse(BaseModel):
+    message: str
+    success: bool = False
+    email_delivery_configured: bool = False

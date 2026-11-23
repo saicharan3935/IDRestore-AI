@@ -168,6 +168,45 @@ function PetFallback({ passwordVisible }) {
   );
 }
 
+// Dedicated Error Boundary protecting the 3D Canvas
+class PetCanvasErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    console.warn('[SecurityPet3D] WebGL or 3D character error caught by boundary:', error?.message);
+    if (this.props.onError) {
+      this.props.onError(error);
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
+function checkWebGLSupport() {
+  if (typeof window === 'undefined') return false;
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl') || canvas.getContext('webgl2'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 // ==============================================================
 // MASTER EXPORT COMPONENT: SECURITY PET 3D
 // ==============================================================
@@ -181,7 +220,7 @@ export default function SecurityPet3D({
 }) {
   const containerRef = useRef(null);
   const cursorRef = useRef({ x: 0, y: 0 });
-  const [hasWebGlError, setHasWebGlError] = useState(false);
+  const [hasWebGlError, setHasWebGlError] = useState(() => !checkWebGLSupport());
   const [reducedMotion, setReducedMotion] = useState(false);
 
   // Check prefers-reduced-motion
@@ -289,39 +328,54 @@ export default function SecurityPet3D({
         {hasWebGlError ? (
           <PetFallback passwordVisible={passwordVisible} />
         ) : (
-          <Canvas
-            camera={{ position: [0, 0.15, 2.7], fov: 42 }}
-            gl={{
-              antialias: true,
-              alpha: true,
-              powerPreference: 'high-performance',
-            }}
-            dpr={[1, 1.5]}
-            style={{ background: 'transparent' }}
-            onCreated={({ gl }) => {
-              gl.setClearColor(0x000000, 0);
-            }}
+          <PetCanvasErrorBoundary
             onError={() => setHasWebGlError(true)}
+            fallback={<PetFallback passwordVisible={passwordVisible} />}
           >
-            {/* Obsidian Futurism 3-Point Lighting */}
-            <ambientLight intensity={1.2} color="#101820" />
-            <directionalLight position={[3.5, 4.5, 4.0]} intensity={2.2} color="#DCE7EC" />
-            <directionalLight position={[-3.5, -1.0, -2.5]} intensity={2.4} color="#00E5FF" />
-            <pointLight position={[0, -2.0, 1.2]} intensity={0.9} color="#00FFA3" distance={6} />
+            <Canvas
+              camera={{ position: [0, 0.15, 2.7], fov: 42 }}
+              gl={{
+                antialias: true,
+                alpha: true,
+                powerPreference: 'high-performance',
+              }}
+              dpr={[1, 1.5]}
+              style={{ background: 'transparent' }}
+              onCreated={({ gl }) => {
+                try {
+                  gl.setClearColor(0x000000, 0);
+                  if (gl.domElement) {
+                    gl.domElement.addEventListener('webglcontextlost', (e) => {
+                      e.preventDefault();
+                      console.warn('[SecurityPet3D] WebGL context lost. Engaging 2D fallback.');
+                      setHasWebGlError(true);
+                    }, false);
+                  }
+                } catch (e) {
+                  console.warn('[SecurityPet3D] gl onCreated error:', e?.message);
+                }
+              }}
+            >
+              {/* Obsidian Futurism 3-Point Lighting */}
+              <ambientLight intensity={1.2} color="#101820" />
+              <directionalLight position={[3.5, 4.5, 4.0]} intensity={2.2} color="#DCE7EC" />
+              <directionalLight position={[-3.5, -1.0, -2.5]} intensity={2.4} color="#00E5FF" />
+              <pointLight position={[0, -2.0, 1.2]} intensity={0.9} color="#00FFA3" distance={6} />
 
-            <Suspense fallback={null}>
-              <HolographicPedestal />
-              <PetModel
-                passwordVisible={passwordVisible}
-                passwordFocused={passwordFocused}
-                isTypingPassword={isTypingPassword}
-                loginPending={loginPending}
-                loginResult={loginResult}
-                reducedMotion={reducedMotion}
-                cursorRef={cursorRef}
-              />
-            </Suspense>
-          </Canvas>
+              <Suspense fallback={null}>
+                <HolographicPedestal />
+                <PetModel
+                  passwordVisible={passwordVisible}
+                  passwordFocused={passwordFocused}
+                  isTypingPassword={isTypingPassword}
+                  loginPending={loginPending}
+                  loginResult={loginResult}
+                  reducedMotion={reducedMotion}
+                  cursorRef={cursorRef}
+                />
+              </Suspense>
+            </Canvas>
+          </PetCanvasErrorBoundary>
         )}
 
         {/* Peek-a-Boo Tooltip when covering eyes */}

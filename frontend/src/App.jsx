@@ -13,6 +13,7 @@ import DocumentHistory from './pages/DocumentHistory';
 import HRMigrationCenter from './pages/HRMigrationCenter';
 import AnalyticsView from './pages/AnalyticsView';
 import SettingsView from './pages/SettingsView';
+import AuthErrorBoundary from './components/common/AuthErrorBoundary';
 
 import { api } from './services/api';
 
@@ -131,12 +132,14 @@ export default function App() {
 
       {/* 2. AUTHENTICATION & ACCESS CONTROL VIEW */}
       {currentView === 'auth' && (
-        <AuthPage
-          initialMode={authMode}
-          redirectTab={redirectTargetTab}
-          onAuthSuccess={handleAuthSuccess}
-          onGoLanding={handleGoLanding}
-        />
+        <AuthErrorBoundary onGoSignIn={() => setAuthMode('login')}>
+          <AuthPage
+            initialMode={authMode}
+            redirectTab={redirectTargetTab}
+            onAuthSuccess={handleAuthSuccess}
+            onGoLanding={handleGoLanding}
+          />
+        </AuthErrorBoundary>
       )}
 
       {/* 3. PROTECTED ENTERPRISE WORKSPACE (Requires user session) */}
@@ -185,12 +188,14 @@ export default function App() {
           </div>
         ) : (
           /* Security fallback redirect */
-          <AuthPage
-            initialMode="login"
-            redirectTab={currentTab}
-            onAuthSuccess={handleAuthSuccess}
-            onGoLanding={handleGoLanding}
-          />
+          <AuthErrorBoundary onGoSignIn={() => setAuthMode('login')}>
+            <AuthPage
+              initialMode="login"
+              redirectTab={currentTab}
+              onAuthSuccess={handleAuthSuccess}
+              onGoLanding={handleGoLanding}
+            />
+          </AuthErrorBoundary>
         )
       )}
     </div>

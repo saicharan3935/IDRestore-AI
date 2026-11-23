@@ -16,6 +16,11 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import SecurityPet3D from '../components/pet/SecurityPet3D';
+import AuthErrorBoundary from '../components/common/AuthErrorBoundary';
+
+function validateEmail(val) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val || '');
+}
 
 export default function AuthPage({
   onAuthSuccess,
@@ -85,8 +90,15 @@ export default function AuthPage({
     setErrorMsg(null);
   };
 
-  const validateEmail = (val) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+  // Reliable tab switching: safely resets temporary interaction states without breaking 3D animation
+  const handleSwitchMode = (newMode) => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    setLoginResult('idle');
+    setIsPasswordFocused(false);
+    setIsTypingPassword(false);
+    setShowPassword(false);
+    setMode(newMode);
   };
 
   const handleSubmit = async (e) => {
@@ -107,7 +119,12 @@ export default function AuthPage({
       setLoading(true);
       try {
         const res = await api.forgotPassword(email);
-        setSuccessMsg(res.message);
+        if (res.email_delivery_configured) {
+          setSuccessMsg(res.message);
+        } else {
+          // Transparently inform the user that SMTP is unconfigured in this environment
+          setErrorMsg(res.message);
+        }
       } catch (err) {
         setErrorMsg(err.message || 'Password recovery request failed.');
       } finally {
@@ -182,7 +199,7 @@ export default function AuthPage({
   };
 
   return (
-    <div className="min-h-screen bg-[#050709] text-[#F8FAFC] flex flex-col justify-between relative overflow-hidden select-none">
+    <div className="min-h-screen bg-[#050709] text-[#F8FAFC] flex flex-col justify-between relative overflow-x-hidden overflow-y-auto">
       {/* Background Ambience: Obsidian Futurism */}
       <div className="absolute inset-0 scanline-grid opacity-20 pointer-events-none" />
       <div className="absolute -top-32 -left-32 w-96 h-96 bg-[#00E5FF]/10 rounded-full blur-3xl pointer-events-none" />
@@ -205,11 +222,11 @@ export default function AuthPage({
       </header>
 
       {/* Center Auth Area: Responsive Grid connecting BYTE and Form */}
-      <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-6 sm:py-8">
-        <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
+      <main className="relative z-10 flex-1 flex items-start lg:items-center justify-center px-4 py-8 sm:py-12 my-auto w-full">
+        <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-start lg:items-center">
           
           {/* Left Column (or Top on Mobile): 3D AI Security Sentinel BYTE */}
-          <div className="lg:col-span-5 h-[300px] sm:h-[380px] lg:h-[540px] w-full">
+          <div className="lg:col-span-5 h-[320px] sm:h-[400px] lg:h-[540px] w-full sticky top-6 lg:static">
             <SecurityPet3D
               passwordVisible={showPassword}
               passwordFocused={isPasswordFocused}
@@ -220,57 +237,59 @@ export default function AuthPage({
             />
           </div>
 
-          {/* Right Column: Authentication Card */}
-          <div className="lg:col-span-7 bg-[#101820]/90 backdrop-blur-2xl border border-[#22323D] hover:border-[#00E5FF]/40 rounded-3xl p-6 sm:p-8 shadow-2xl transition-all">
-            {/* Logo & Headline */}
-            <div className="text-center mb-6 sm:mb-8">
-              <div className="w-12 h-12 rounded-xl bg-[#0B1117] border border-[#00E5FF]/40 flex items-center justify-center mx-auto mb-3 shadow-cyan-glow">
-                <Sparkles className="w-6 h-6 text-[#00E5FF]" />
-              </div>
-              <h1 className="text-xl sm:text-2xl font-bold font-mono tracking-wider text-[#F8FAFC]">
-                IDRESTORE <span className="text-[#00E5FF]">AI</span>
-              </h1>
-              <p className="text-xs font-mono text-[#94A3B8] mt-1 uppercase tracking-widest">
-                OBSIDIAN FUTURISM ACCESS CONTROL
-              </p>
-            </div>
+          {/* Right Column: Authentication Card wrapped in Error Boundary */}
+          <div className="lg:col-span-7">
+            <AuthErrorBoundary onGoSignIn={() => handleSwitchMode('login')}>
+              <div className="bg-[#101820]/90 backdrop-blur-2xl border border-[#22323D] hover:border-[#00E5FF]/40 rounded-3xl p-6 sm:p-8 shadow-2xl transition-all">
+                {/* Logo & Headline */}
+                <div className="text-center mb-6 sm:mb-8">
+                  <div className="w-12 h-12 rounded-xl bg-[#0B1117] border border-[#00E5FF]/40 flex items-center justify-center mx-auto mb-3 shadow-cyan-glow">
+                    <Sparkles className="w-6 h-6 text-[#00E5FF]" />
+                  </div>
+                  <h1 className="text-xl sm:text-2xl font-bold font-mono tracking-wider text-[#F8FAFC]">
+                    IDRESTORE <span className="text-[#00E5FF]">AI</span>
+                  </h1>
+                  <p className="text-xs font-mono text-[#94A3B8] mt-1 uppercase tracking-widest">
+                    OBSIDIAN FUTURISM ACCESS CONTROL
+                  </p>
+                </div>
 
-            {/* Mode Switcher Tabs */}
-            <div className="flex rounded-xl bg-[#0B1117] p-1 border border-[#22323D] mb-6 text-xs font-mono">
-              <button
-                type="button"
-                onClick={() => { setMode('login'); setErrorMsg(null); setSuccessMsg(null); setLoginResult('idle'); }}
-                className={`flex-1 py-2 rounded-lg transition-all ${
-                  mode === 'login'
-                    ? 'bg-[#17232C] text-[#00E5FF] font-bold shadow-cyan-glow'
-                    : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => { setMode('register'); setErrorMsg(null); setSuccessMsg(null); setLoginResult('idle'); }}
-                className={`flex-1 py-2 rounded-lg transition-all ${
-                  mode === 'register'
-                    ? 'bg-[#17232C] text-[#00E5FF] font-bold shadow-cyan-glow'
-                    : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-                }`}
-              >
-                Create Account
-              </button>
-              <button
-                type="button"
-                onClick={() => { setMode('forgot'); setErrorMsg(null); setSuccessMsg(null); setLoginResult('idle'); }}
-                className={`flex-1 py-2 rounded-lg transition-all ${
-                  mode === 'forgot'
-                    ? 'bg-[#17232C] text-[#00E5FF] font-bold shadow-cyan-glow'
-                    : 'text-[#94A3B8] hover:text-[#F8FAFC]'
-                }`}
-              >
-                Recovery
-              </button>
-            </div>
+                {/* Mode Switcher Tabs */}
+                <div className="flex rounded-xl bg-[#0B1117] p-1 border border-[#22323D] mb-6 text-xs font-mono">
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('login')}
+                    className={`flex-1 py-2 rounded-lg transition-all ${
+                      mode === 'login'
+                        ? 'bg-[#17232C] text-[#00E5FF] font-bold shadow-cyan-glow'
+                        : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                    }`}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('register')}
+                    className={`flex-1 py-2 rounded-lg transition-all ${
+                      mode === 'register'
+                        ? 'bg-[#17232C] text-[#00E5FF] font-bold shadow-cyan-glow'
+                        : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                    }`}
+                  >
+                    Create Account
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('forgot')}
+                    className={`flex-1 py-2 rounded-lg transition-all ${
+                      mode === 'forgot'
+                        ? 'bg-[#17232C] text-[#00E5FF] font-bold shadow-cyan-glow'
+                        : 'text-[#94A3B8] hover:text-[#F8FAFC]'
+                    }`}
+                  >
+                    Recovery
+                  </button>
+                </div>
 
             {/* Alerts */}
             {errorMsg && (
@@ -289,6 +308,18 @@ export default function AuthPage({
 
             {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === 'forgot' && (
+                <div className="p-3.5 rounded-xl bg-[#0B1117] border border-[#22323D] text-[11px] font-mono space-y-1.5 mb-2">
+                  <div className="flex items-center space-x-2 text-[#00E5FF]">
+                    <KeyRound className="w-4 h-4 text-[#00E5FF]" />
+                    <span className="font-bold tracking-wider uppercase text-[10px]">ENTERPRISE RECOVERY PROTOCOL</span>
+                  </div>
+                  <p className="text-[#94A3B8] leading-relaxed text-[11px]">
+                    Self-service recovery link dispatch requires an active enterprise SMTP gateway. In this demonstration environment, password modifications are managed via administrative console or pre-seeded credentials.
+                  </p>
+                </div>
+              )}
+
               {mode === 'register' && (
                 <>
                   <div>
@@ -465,28 +496,39 @@ export default function AuthPage({
               )}
 
               {/* Submit Action */}
-              <div className="pt-2">
+              <div className="pt-2 flex flex-col sm:flex-row gap-3">
                 <button
                   type="submit"
                   disabled={isSubmitDisabled}
-                  className="w-full py-3 rounded-xl font-mono text-xs font-bold bg-[#00E5FF] text-black hover:bg-[#33EBFF] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2 shadow-cyan-strong active:scale-95"
+                  className="flex-1 py-3 rounded-xl font-mono text-xs font-bold bg-[#00E5FF] text-black hover:bg-[#33EBFF] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2 shadow-cyan-strong active:scale-95"
                 >
                   {loading ? (
                     <div className="flex items-center space-x-2">
                       <span className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                      <span>VERIFYING CREDENTIALS...</span>
+                      <span>{mode === 'forgot' ? 'CHECKING GATEWAY...' : 'VERIFYING CREDENTIALS...'}</span>
                     </div>
                   ) : (
                     <>
                       <span>
                         {mode === 'login' && 'AUTHENTICATE & ENTER'}
                         {mode === 'register' && 'PROVISION ENTERPRISE ACCOUNT'}
-                        {mode === 'forgot' && 'REQUEST PASSWORD RECOVERY'}
+                        {mode === 'forgot' && 'CHECK RECOVERY GATEWAY'}
                       </span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
                 </button>
+
+                {mode === 'forgot' && (
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchMode('login')}
+                    className="py-3 px-4 rounded-xl font-mono text-xs text-[#DCE7EC] hover:text-[#00E5FF] bg-[#17232C] hover:bg-[#22323D] border border-[#22323D] transition-all flex items-center justify-center space-x-2"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    <span>Return to Sign In</span>
+                  </button>
+                )}
               </div>
             </form>
 
@@ -506,6 +548,8 @@ export default function AuthPage({
                 </button>
               </div>
             )}
+              </div>
+            </AuthErrorBoundary>
           </div>
         </div>
       </main>

@@ -262,6 +262,28 @@ def run_tests():
     passed += 1
     print("[+] TEST 12 PASSED: Backend schema isolation verified (confirm_password is strictly client-side).")
 
+    # TEST 13: Honest Recovery Status (No Fake Success When Email Delivery Unconfigured)
+    total += 1
+    from app.schemas.auth import ForgotPasswordRequest
+    from app.routes.auth import forgot_password_request
+    rec_payload = ForgotPasswordRequest(email="recovery_test@idrestore.ai")
+    rec_result = forgot_password_request(rec_payload, dummy_req, db)
+    assert rec_result.email_delivery_configured is False, "SMTP must report unconfigured in local env"
+    assert "SMTP email dispatch is not configured" in rec_result.message
+    passed += 1
+    print("[+] TEST 13 PASSED: Recovery endpoint reports unconfigured SMTP honestly (no fake email sent).")
+
+    # TEST 14: Recovery Email Format Validation
+    total += 1
+    invalid_rec_rejected = False
+    try:
+        ForgotPasswordRequest(email="invalid_email_format")
+    except ValidationError:
+        invalid_rec_rejected = True
+    assert invalid_rec_rejected, "Invalid recovery email must be rejected by Pydantic schema"
+    passed += 1
+    print("[+] TEST 14 PASSED: Recovery email format validation strictly enforced.")
+
     # Cleanup synthetic user
     db.query(UserSession).filter(UserSession.user_id == db_user.id).delete()
     db.delete(db_user)
