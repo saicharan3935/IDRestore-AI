@@ -40,6 +40,25 @@ export default function AuthPage({
   const [isTypingPassword, setIsTypingPassword] = useState(false);
   const [loginResult, setLoginResult] = useState('idle'); // 'idle' | 'success' | 'error'
 
+  // Live password complexity policy checklist
+  const passwordCriteria = {
+    minLength: password.length >= 8,
+    hasUpper: /[A-Z]/.test(password),
+    hasLower: /[a-z]/.test(password),
+    hasDigit: /\d/.test(password),
+    hasSpecial: /[!@#$%^&*(),.?":{}|<>\-_=+[\]\\/`~]/.test(password),
+  };
+  const isPasswordPolicyMet = Object.values(passwordCriteria).every(Boolean);
+  const passwordsMatch = confirmPassword.length > 0 && password === confirmPassword;
+
+  const isSubmitDisabled = loading || (
+    mode === 'register'
+      ? (!fullName.trim() || fullName.trim().length < 2 || !validateEmail(email) || !isPasswordPolicyMet || !passwordsMatch)
+      : mode === 'login'
+        ? (!email.trim() || !password)
+        : (!email.trim() || !validateEmail(email))
+  );
+
   const typingTimerRef = useRef(null);
 
   // Clean up typing debounce timer on unmount
@@ -105,14 +124,14 @@ export default function AuthPage({
     }
 
     if (mode === 'register') {
-      if (!fullName.trim()) {
-        setErrorMsg('Full name is required for enterprise HR audit trail registration.');
+      if (!fullName.trim() || fullName.trim().length < 2) {
+        setErrorMsg('Full legal name must contain at least 2 characters.');
         setLoginResult('error');
         setTimeout(() => setLoginResult('idle'), 1800);
         return;
       }
-      if (password.length < 8) {
-        setErrorMsg('Password must be at least 8 characters in length.');
+      if (!isPasswordPolicyMet) {
+        setErrorMsg('Password must meet all security policy complexity requirements.');
         setLoginResult('error');
         setTimeout(() => setLoginResult('idle'), 1800);
         return;
@@ -134,7 +153,7 @@ export default function AuthPage({
           onAuthSuccess(res.user, redirectTab);
         }, 850);
       } catch (err) {
-        setErrorMsg(err.message || 'Registration failed.');
+        setErrorMsg(err.message || 'Please check your registration details and try again.');
         setLoginResult('error');
         setTimeout(() => setLoginResult('idle'), 2000);
       } finally {
@@ -181,7 +200,7 @@ export default function AuthPage({
 
         <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#101820] border border-[#22323D] text-[10px] font-mono text-[#00FFA3]">
           <span className="w-1.5 h-1.5 rounded-full bg-[#00FFA3] animate-pulse" />
-          <span>ZERO-TRUST SECURE ENCLAVE</span>
+          <span>ENTERPRISE ACCESS CONTROL</span>
         </div>
       </header>
 
@@ -290,9 +309,12 @@ export default function AuthPage({
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-mono uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                      Organizational Role
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[11px] font-mono uppercase tracking-wider text-[#94A3B8]">
+                        Organizational Role
+                      </label>
+                      <span className="text-[10px] font-mono text-[#00FFA3]">SELF-REGISTRATION</span>
+                    </div>
                     <div className="relative">
                       <Building2 className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <select
@@ -300,11 +322,14 @@ export default function AuthPage({
                         onChange={(e) => setRole(e.target.value)}
                         className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0B1117] border border-[#22323D] text-xs font-mono text-[#F8FAFC] focus:outline-none focus:border-[#00E5FF] transition-colors"
                       >
-                        <option value="HR_ANALYST">HR Analyst (Document Processing)</option>
-                        <option value="HR_ADMIN">HR Migration Administrator</option>
-                        <option value="AUDITOR">Compliance & Verification Auditor</option>
+                        <option value="HR_ANALYST">HR Analyst (Standard Restoration Access)</option>
+                        <option value="HR_ADMIN" disabled>HR Migration Administrator (Admin Invite Required)</option>
+                        <option value="AUDITOR" disabled>Compliance & Verification Auditor (Admin Invite Required)</option>
                       </select>
                     </div>
+                    <p className="mt-1 text-[10px] font-mono text-[#94A3B8]">
+                      Privileged roles (HR_ADMIN, AUDITOR) require internal assignment by an existing administrator.
+                    </p>
                   </div>
                 </>
               )}
@@ -367,32 +392,84 @@ export default function AuthPage({
               )}
 
               {mode === 'register' && (
-                <div>
-                  <label className="block text-[11px] font-mono uppercase tracking-wider text-[#94A3B8] mb-1.5">
-                    Confirm Password
-                  </label>
-                  <div className="relative">
-                    <KeyRound className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      onFocus={() => setIsPasswordFocused(true)}
-                      onBlur={() => setIsPasswordFocused(false)}
-                      placeholder="••••••••••••"
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0B1117] border border-[#22323D] text-xs font-mono text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#00E5FF] transition-colors"
-                    />
+                <>
+                  <div>
+                    <label className="block text-[11px] font-mono uppercase tracking-wider text-[#94A3B8] mb-1.5">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <KeyRound className="w-4 h-4 text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        onFocus={() => setIsPasswordFocused(true)}
+                        onBlur={() => setIsPasswordFocused(false)}
+                        placeholder="••••••••••••"
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-[#0B1117] border border-[#22323D] text-xs font-mono text-[#F8FAFC] placeholder-[#94A3B8]/60 focus:outline-none focus:border-[#00E5FF] transition-colors"
+                      />
+                    </div>
                   </div>
-                </div>
+
+                  {/* Live Password Policy Checklist */}
+                  <div className="p-3.5 rounded-xl bg-[#0B1117] border border-[#22323D] text-[11px] font-mono space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-[#94A3B8] font-bold">
+                        Password Security Policy
+                      </span>
+                      <span className={`text-[10px] font-mono ${isPasswordPolicyMet ? 'text-[#00FFA3]' : 'text-[#94A3B8]'}`}>
+                        {isPasswordPolicyMet ? 'REQUIREMENTS SATISFIED' : 'COMPLEXITY REQUIRED'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 border-t border-[#22323D]/50">
+                      <div className={`flex items-center space-x-1.5 ${passwordCriteria.minLength ? 'text-[#00FFA3]' : 'text-[#94A3B8]'}`}>
+                        <CheckCircle className={`w-3.5 h-3.5 ${passwordCriteria.minLength ? 'text-[#00FFA3]' : 'text-[#94A3B8]/40'}`} />
+                        <span>At least 8 characters</span>
+                      </div>
+                      <div className={`flex items-center space-x-1.5 ${passwordCriteria.hasUpper ? 'text-[#00FFA3]' : 'text-[#94A3B8]'}`}>
+                        <CheckCircle className={`w-3.5 h-3.5 ${passwordCriteria.hasUpper ? 'text-[#00FFA3]' : 'text-[#94A3B8]/40'}`} />
+                        <span>1 uppercase letter (A-Z)</span>
+                      </div>
+                      <div className={`flex items-center space-x-1.5 ${passwordCriteria.hasLower ? 'text-[#00FFA3]' : 'text-[#94A3B8]'}`}>
+                        <CheckCircle className={`w-3.5 h-3.5 ${passwordCriteria.hasLower ? 'text-[#00FFA3]' : 'text-[#94A3B8]/40'}`} />
+                        <span>1 lowercase letter (a-z)</span>
+                      </div>
+                      <div className={`flex items-center space-x-1.5 ${passwordCriteria.hasDigit ? 'text-[#00FFA3]' : 'text-[#94A3B8]'}`}>
+                        <CheckCircle className={`w-3.5 h-3.5 ${passwordCriteria.hasDigit ? 'text-[#00FFA3]' : 'text-[#94A3B8]/40'}`} />
+                        <span>1 numerical digit (0-9)</span>
+                      </div>
+                      <div className={`flex items-center space-x-1.5 sm:col-span-2 ${passwordCriteria.hasSpecial ? 'text-[#00FFA3]' : 'text-[#94A3B8]'}`}>
+                        <CheckCircle className={`w-3.5 h-3.5 ${passwordCriteria.hasSpecial ? 'text-[#00FFA3]' : 'text-[#94A3B8]/40'}`} />
+                        <span>1 special character (!@#$%^&*...)</span>
+                      </div>
+                    </div>
+
+                    {confirmPassword.length > 0 && (
+                      <div className="pt-2 border-t border-[#22323D]/50 flex items-center space-x-1.5 text-xs">
+                        {passwordsMatch ? (
+                          <>
+                            <CheckCircle className="w-3.5 h-3.5 text-[#00FFA3]" />
+                            <span className="text-[#00FFA3]">Passwords match</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="w-3.5 h-3.5 text-[#FF5C5C]" />
+                            <span className="text-[#FF5C5C]">Passwords do not match</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
 
               {/* Submit Action */}
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full py-3 rounded-xl font-mono text-xs font-bold bg-[#00E5FF] text-black hover:bg-[#33EBFF] disabled:opacity-50 disabled:pointer-events-none transition-all flex items-center justify-center space-x-2 shadow-cyan-strong active:scale-95"
+                  disabled={isSubmitDisabled}
+                  className="w-full py-3 rounded-xl font-mono text-xs font-bold bg-[#00E5FF] text-black hover:bg-[#33EBFF] disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center space-x-2 shadow-cyan-strong active:scale-95"
                 >
                   {loading ? (
                     <div className="flex items-center space-x-2">

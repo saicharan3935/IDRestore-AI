@@ -18,37 +18,103 @@ function getAuthHeaders(isJson = true) {
   return headers;
 }
 
+async function parseApiError(res, defaultMsg = 'Request failed') {
+  let errData = null;
+  try {
+    errData = await res.json();
+  } catch {
+    // Non-JSON response (e.g. gateway timeout or proxy error)
+  }
+
+  if (errData && errData.detail) {
+    if (Array.isArray(errData.detail)) {
+      // Pydantic validation error array
+      const messages = errData.detail.map((item) => {
+        if (typeof item === 'string') return item;
+        let msg = item.msg || item.message || JSON.stringify(item);
+        if (typeof msg === 'string' && msg.startsWith('Value error, ')) {
+          msg = msg.replace('Value error, ', '');
+        }
+        return msg;
+      });
+      return messages.join('. ');
+    }
+    if (typeof errData.detail === 'string') {
+      return errData.detail;
+    }
+  }
+
+  if (res.status === 400) {
+    return 'Please check your registration details and try again.';
+  }
+  if (res.status === 401) {
+    return 'Invalid email or password. Please verify your credentials.';
+  }
+  if (res.status === 403) {
+    return 'Access denied. You do not have permission to access this resource.';
+  }
+  if (res.status === 409) {
+    return 'This email address is already registered.';
+  }
+  if (res.status === 422) {
+    return 'Password or registration details do not meet security policy requirements.';
+  }
+  if (res.status === 429) {
+    return 'Too many authentication attempts. Please wait 60 seconds before retrying.';
+  }
+  if (res.status >= 502 && res.status <= 504) {
+    return 'Unable to connect to the server. Please try again.';
+  }
+  if (res.status >= 500) {
+    return 'Registration is temporarily unavailable. Please try again later.';
+  }
+
+  return defaultMsg;
+}
+
 export const api = {
   // Authentication & Access Control
   async register(email, password, fullName, role = 'HR_ANALYST') {
-    const res = await fetch(`${API_BASE}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({
-        email,
-        password,
-        full_name: fullName,
-        role
-      })
-    });
+    let res;
+    try {
+      res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          email: (email || '').trim().toLowerCase(),
+          password,
+          full_name: (fullName || '').trim(),
+          role: role || 'HR_ANALYST'
+        })
+      });
+    } catch (networkErr) {
+      throw new Error('Unable to connect to the server. Please verify the backend is online and try again.');
+    }
+
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Registration failed');
+      const errMsg = await parseApiError(res, 'Registration failed. Please check your details and try again.');
+      throw new Error(errMsg);
     }
     return res.json();
   },
 
   async login(email, password) {
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ email, password })
-    });
+    let res;
+    try {
+      res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email: (email || '').trim().toLowerCase(), password })
+      });
+    } catch (networkErr) {
+      throw new Error('Unable to connect to the server. Please verify the backend is online and try again.');
+    }
+
     if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || 'Invalid email or password');
+      const errMsg = await parseApiError(res, 'Invalid email or password.');
+      throw new Error(errMsg);
     }
     return res.json();
   },

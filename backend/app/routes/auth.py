@@ -29,49 +29,70 @@ def register_user(
     db: Session = Depends(get_db)
 ):
     """
-    Registers a new HR analyst / administrator account.
+    Registers a new standard HR analyst account.
     Hashes password using Argon2id, generates session, and sets secure HttpOnly cookies.
+    Enforces security policy: prevents self-assignment of privileged roles (HR_ADMIN, AUDITOR).
     """
     check_rate_limit(request)
     normalized_email = payload.email.strip().lower()
+
+    # Enforce role validation on backend (prevent privilege escalation)
+    assigned_role = (payload.role or "HR_ANALYST").strip().upper()
+    if assigned_role in {"HR_ADMIN", "AUDITOR"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Privileged roles (HR_ADMIN, AUDITOR) cannot be self-assigned during registration. Please register as HR_ANALYST or contact an administrator."
+        )
+    if assigned_role != "HR_ANALYST":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid organizational role '{assigned_role}'. Allowed self-registration role is HR_ANALYST."
+        )
 
     # Check email uniqueness
     existing_user = db.query(User).filter(User.email == normalized_email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="An account with this email address already exists."
+            detail="This email address is already registered. Please sign in or use a different email."
         )
 
-    # Hash password with Argon2id
+    # Hash password with Argon2id (never logged)
     hashed = hash_password(payload.password)
 
-    # Create User record
-    new_user = User(
-        email=normalized_email,
-        hashed_password=hashed,
-        full_name=payload.full_name.strip(),
-        role=payload.role or "HR_ANALYST",
-        is_active=True
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    # Atomic transaction for user creation and initial session
+    try:
+        new_user = User(
+            email=normalized_email,
+            hashed_password=hashed,
+            full_name=payload.full_name.strip(),
+            role="HR_ANALYST",
+            is_active=True
+        )
+        db.add(new_user)
+        db.flush()
 
-    # Create authenticated session
-    session_token, csrf_token = generate_tokens()
-    expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_DURATION_DAYS)
+        # Create authenticated session
+        session_token, csrf_token = generate_tokens()
+        expires_at = datetime.now(timezone.utc) + timedelta(days=SESSION_DURATION_DAYS)
 
-    session_record = UserSession(
-        user_id=new_user.id,
-        session_token=session_token,
-        csrf_token=csrf_token,
-        expires_at=expires_at,
-        user_agent=(request.headers.get("user-agent") or "")[:255],
-        ip_address=request.client.host if request.client else "127.0.0.1"
-    )
-    db.add(session_record)
-    db.commit()
+        session_record = UserSession(
+            user_id=new_user.id,
+            session_token=session_token,
+            csrf_token=csrf_token,
+            expires_at=expires_at,
+            user_agent=(request.headers.get("user-agent") or "")[:255],
+            ip_address=request.client.host if request.client else "127.0.0.1"
+        )
+        db.add(session_record)
+        db.commit()
+        db.refresh(new_user)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration is temporarily unavailable. Please try again later."
+        )
 
     # Set secure HttpOnly cookie + CSRF cookie
     is_https = request.url.scheme == "https"
