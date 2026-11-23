@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database.session import engine, Base
 from app.models import User, UserSession, Document, BatchJob  # Ensure all models are registered
-from app.routes import auth, dashboard, analyze, restore, history, batch, settings as settings_route
+from app.routes import auth, dashboard, analyze, restore, history, batch, settings as settings_route, chat
 from app.storage.seed_samples import ensure_synthetic_sample_documents
 
 # Create DB tables
@@ -55,6 +55,7 @@ app.include_router(restore.router)
 app.include_router(history.router)
 app.include_router(batch.router)
 app.include_router(settings_route.router)
+app.include_router(chat.router)
 
 # Secure File Serving with Path Traversal Protection
 @app.get("/api/files/upload/{filename}")
@@ -82,10 +83,11 @@ FRONTEND_DIST = settings.BASE_DIR.parent / "frontend" / "dist"
 if FRONTEND_DIST.exists():
     app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="assets")
 
-    @app.get("/{full_path:path}")
+    @app.get("/{full_path:path}", include_in_schema=False)
     def serve_frontend(full_path: str):
-        if full_path.startswith("api/"):
-            raise HTTPException(status_code=404, detail="Endpoint not found")
+        # Never intercept API calls, openapi schema, or swagger docs
+        if full_path.startswith("api/") or full_path in ["openapi.json", "docs", "redoc"]:
+            raise HTTPException(status_code=404, detail="Not found")
         file_path = FRONTEND_DIST / full_path
         if file_path.is_file():
             return FileResponse(str(file_path))

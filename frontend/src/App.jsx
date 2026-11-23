@@ -14,6 +14,7 @@ import HRMigrationCenter from './pages/HRMigrationCenter';
 import AnalyticsView from './pages/AnalyticsView';
 import SettingsView from './pages/SettingsView';
 import AuthErrorBoundary from './components/common/AuthErrorBoundary';
+import WorkspaceByteCompanion from './components/dashboard/WorkspaceByteCompanion';
 
 import { api } from './services/api';
 
@@ -184,6 +185,13 @@ export default function App() {
                 {currentTab === 'analytics' && <AnalyticsView />}
                 {currentTab === 'settings' && <SettingsView />}
               </main>
+
+              {/* PERSISTENT INTELLIGENT BYTE AI COPILOT */}
+              <WorkspaceByteCompanion
+                currentTab={currentTab}
+                onNavigateTab={setCurrentTab}
+                user={user}
+              />
             </div>
           </div>
         ) : (

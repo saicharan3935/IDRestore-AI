@@ -346,4 +346,33 @@ export const api = {
     if (!res.ok) throw new Error('Failed to update API key');
     return res.json();
   },
+
+  // BYTE AI Copilot Chat
+  async chatWithCopilot({ message, currentPage = 'overview', currentTab = 'overview', conversationHistory = [], history = [] }) {
+    let res;
+    const resolvedPage = currentPage || currentTab || 'overview';
+    const resolvedHistory = (conversationHistory && conversationHistory.length > 0) ? conversationHistory : (history || []);
+    const bodyPayload = {
+      message: (message || '').trim(),
+      conversation_history: resolvedHistory,
+      current_page: resolvedPage
+    };
+
+    try {
+      res = await fetch(`${API_BASE}/copilot/chat`, {
+        method: 'POST',
+        headers: getAuthHeaders(true),
+        credentials: 'include',
+        body: JSON.stringify(bodyPayload)
+      });
+    } catch (networkErr) {
+      throw new Error('Unable to connect to BYTE Copilot service. Please ensure the backend server is reachable.');
+    }
+
+    if (!res.ok) {
+      const errMsg = await parseApiError(res, 'Chat request failed');
+      throw new Error(errMsg);
+    }
+    return res.json();
+  },
 };

@@ -36,7 +36,6 @@ import {
 import { api } from '../services/api';
 import HolographicDocScanner3D from '../components/dashboard/HolographicDocScanner3D';
 import EnhancedKpiCard from '../components/dashboard/EnhancedKpiCard';
-import WorkspaceByteCompanion from '../components/dashboard/WorkspaceByteCompanion';
 
 export default function DashboardOverview({ onNavigateTab, onNavigate, user }) {
   const navigate = onNavigateTab || onNavigate || (() => {});
@@ -744,14 +743,6 @@ export default function DashboardOverview({ onNavigateTab, onNavigate, user }) {
           </div>
         )}
       </div>
-
-      {/* ============================================================== */}
-      {/* SECTION 5: BYTE 3D ROBOTIC COMPANION POD */}
-      {/* ============================================================== */}
-      <WorkspaceByteCompanion
-        stats={statsData?.stats}
-        onNavigateTab={navigate}
-      />
     </div>
   );
 }
