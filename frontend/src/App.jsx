@@ -14,6 +14,7 @@ import HRMigrationCenter from './pages/HRMigrationCenter';
 import AnalyticsView from './pages/AnalyticsView';
 import SettingsView from './pages/SettingsView';
 import AuthErrorBoundary from './components/common/AuthErrorBoundary';
+import WorkspaceErrorBoundary from './components/common/WorkspaceErrorBoundary';
 import WorkspaceByteCompanion from './components/dashboard/WorkspaceByteCompanion';
 
 import { api } from './services/api';
@@ -168,22 +169,24 @@ export default function App() {
               />
 
               <main className="flex-1 overflow-y-auto">
-                {currentTab === 'overview' && (
-                  <DashboardOverview onNavigateTab={setCurrentTab} user={user} />
-                )}
-                {currentTab === 'restore' && <RestorationWorkspace />}
-                {currentTab === 'analysis' && (
-                  <AIAnalysisStudio onNavigateTab={setCurrentTab} />
-                )}
-                {currentTab === 'batch' && <BatchProcessing />}
-                {currentTab === 'history' && (
-                  <DocumentHistory initialSearch={globalSearchQuery} />
-                )}
-                {currentTab === 'migration' && (
-                  <HRMigrationCenter onNavigateTab={setCurrentTab} />
-                )}
-                {currentTab === 'analytics' && <AnalyticsView />}
-                {currentTab === 'settings' && <SettingsView />}
+                <WorkspaceErrorBoundary onReset={() => setCurrentTab('overview')}>
+                  {currentTab === 'overview' && (
+                    <DashboardOverview onNavigateTab={setCurrentTab} user={user} />
+                  )}
+                  {currentTab === 'restore' && <RestorationWorkspace />}
+                  {currentTab === 'analysis' && (
+                    <AIAnalysisStudio onNavigateTab={setCurrentTab} />
+                  )}
+                  {currentTab === 'batch' && <BatchProcessing />}
+                  {currentTab === 'history' && (
+                    <DocumentHistory initialSearch={globalSearchQuery} />
+                  )}
+                  {currentTab === 'migration' && (
+                    <HRMigrationCenter onNavigateTab={setCurrentTab} />
+                  )}
+                  {currentTab === 'analytics' && <AnalyticsView />}
+                  {currentTab === 'settings' && <SettingsView />}
+                </WorkspaceErrorBoundary>
               </main>
 
               {/* PERSISTENT INTELLIGENT BYTE AI COPILOT */}
